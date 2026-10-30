@@ -177,7 +177,7 @@ with st.sidebar:
     if st.session_state.get("loaded_demo"):
         st.caption(f"loaded from cache: {st.session_state['loaded_demo']}")
     st.divider()
-    st.metric("Round-trip F1", "0.9915", "810-paper corpus")
+    st.metric("Round-trip F1", "0.9934", "810-paper corpus")
     st.caption("Rebuilt documents read back as the same paper (field-level F1 after "
                "render -> re-extract), not just a PDF that looks right.")
     st.divider()
@@ -248,5 +248,5 @@ if GITHUB_URL:
     footer.append(f"[Code]({GITHUB_URL})")
 if DATASET_DOI:
     footer.append(f"[Dataset]({DATASET_DOI})")
-footer.append("Round-trip F1 0.9915 on 810 papers; 48 tests passing (Session 7)")
+footer.append("Round-trip F1 0.9934 on 810 papers; 61 tests passing (Session 9)")
 st.caption("  |  ".join(footer))
