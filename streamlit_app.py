@@ -7,6 +7,7 @@ works even when arXiv or the TeX installation is unavailable.
 """
 from __future__ import annotations
 
+import importlib
 import json
 import os
 import sys
@@ -19,6 +20,31 @@ APP_DIR = Path(__file__).resolve().parent
 if str(APP_DIR) not in sys.path:
     sys.path.insert(0, str(APP_DIR))
 import pipeline  # noqa: E402
+
+
+def _reload_vendored_modules() -> None:
+    """Pick up deployed changes in the modules this script imports.
+
+    Streamlit hot-reloads this script on a deploy but keeps imported modules in sys.modules.
+    A new template against the previous renderer failed on the live app with
+    "render_with_math is undefined"; the same staleness served a pre-deploy demo cache.
+    reload() is cheap here: sir_extractor/renderer are pure standard library at import time.
+    """
+    for name in ("sir_extractor", "renderer"):
+        mod = sys.modules.get(name)
+        if mod is None:
+            continue
+        try:
+            importlib.reload(mod)
+        except Exception:
+            pass
+    try:
+        importlib.reload(pipeline)
+    except Exception:
+        pass
+
+
+_reload_vendored_modules()
 
 CACHE_DIR = APP_DIR / "cached_outputs"
 
