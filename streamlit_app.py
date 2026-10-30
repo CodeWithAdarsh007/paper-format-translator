@@ -56,7 +56,9 @@ def demo_title(pid: str) -> str:
 
 
 @st.cache_data(show_spinner=False)
-def load_cached(pid: str) -> dict:
+def _load_cached(pid: str, stamp: float) -> dict:
+    """stamp is the report.json mtime: a cached demo refreshed by a deploy must not serve the
+    previous PDFs out of Streamlit's memo, which survives a hot reload of this file."""
     base = CACHE_DIR / pid
     report = {}
     if (base / "report.json").is_file():
@@ -86,6 +88,12 @@ def load_cached(pid: str) -> dict:
     report["extracted_refs"] = report.get("extracted_refs", 0)
     return {"success": any(p["pdf"] for p in papers.values()),
             "papers": papers, "report": report}
+
+
+def load_cached(pid: str) -> dict:
+    report = CACHE_DIR / pid / "report.json"
+    stamp = report.stat().st_mtime if report.is_file() else 0.0
+    return _load_cached(pid, stamp)
 
 
 def clear_demo_marker() -> None:
