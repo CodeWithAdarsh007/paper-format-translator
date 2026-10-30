@@ -71,7 +71,9 @@
 {%- for a in authors or [] -%}
 \author{ {{- a.name | default("Anonymous", true) | texu -}} }
 {%- if a.affiliation %}
-\affiliation{\institution{ {{- a.affiliation | texu -}} }}
+{#- acmart raises "No country present for an affiliation" (a hard class error) when \country is
+    absent. The SIR does not carry countries, and an empty one is accepted and prints nothing. -#}
+\affiliation{\institution{ {{- a.affiliation | texu -}} }\country{}}
 {%- endif -%}
 {%- if a.email %}\email{ {{- a.email | texu -}} }{% endif %}
 {%- endfor -%}
@@ -147,8 +149,8 @@
 {%- elif level >= 1 %}\section{}
 
 {%- endif -%}
-{%- for b in section.get("blocks") or [] %}
-{{ render_block(b) }}
+{%- for b in section.get("blocks") or [] -%}
+{{ b.get("_sep", "\n") }}{{ render_block(b) }}
 {%- endfor -%}
 {%- endmacro %}
 

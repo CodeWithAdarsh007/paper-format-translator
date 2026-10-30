@@ -2,6 +2,8 @@
 \documentclass[sigconf]{acmart}\usepackage{booktabs}
 \usepackage{multirow}
 \usepackage{tabularx}
+\usepackage{longtable}
+\usepackage{tabulary}
 \usepackage{colortbl}
 \usepackage{bm}
 \usepackage{makecell}
@@ -30,7 +32,7 @@
 \ifdefined\sf\else\let\sf\sffamily\fi
 \ifdefined\tt\else\let\tt\ttfamily\fi
 
-\author{Jianghui Wang[1] Vinay Joshi[1] Saptarshi Majumder Xu Chao Bin Ding Ziqiong Liu Pratik Prabhanjan Brahma Dong Li Zicheng Liu Emad Barsoum Advanced Micro Devices, Inc. (AMD)}
+\author{Jianghui Wang}\author{Vinay Joshi}\author{Saptarshi Majumder}\author{Xu Chao}\author{Bin Ding}\author{Ziqiong Liu}\author{Pratik Prabhanjan Brahma}\author{Dong Li}\author{Zicheng Liu}\author{Emad Barsoum}\affiliation{\institution{Advanced Micro Devices, Inc. (AMD)}\country{}}
 \begin{document}
 
 \title{GEAK: Introducing Triton Kernel AI Agent \& Evaluation Benchmarks}
@@ -62,55 +64,42 @@ Key Contributions:
 Furthermore, GEAK-generated kernels demonstrate an average speedup of up to $2.59$$\times$ over their reference counterparts on the TritonBench-revised set.
 \section{Related Work}\paragraph{Benchmarks}
 As program synthesis research advances, the need for rigorous and multidimensional benchmarks has become increasingly important. Most existing coding benchmarks concentrate on functional correctness, often assessed through manually crafted test cases and isolated execution environments. For instance, HumanEval provides expert-written programming tasks paired with curated test suites, while MBPP
-
 \cite{austin2021programsynthesislargelanguage}
 collects problems through crowdsourcing. To improve coverage and scalability, more recent approaches have turned to automated test generation
-
 \cite{liu2023codegeneratedchatgptreally}
 , enabling broader application in areas such as software engineering and developer assistance
-
 \cite{jimenez2024swebenchlanguagemodelsresolve}
 In addition to correctness, performance profiling is gaining traction as a crucial axis in benchmarking (
-
 \cite{shypula2024learningperformanceimprovingcodeedits}
 \cite{liu2023codegeneratedchatgptreally}
 \cite{huang2025effibenchbenchmarkingefficiencyautomatically}
 \cite{qiu2025efficientllmgeneratedcoderigorous}
 ). However, most existing frameworks emphasize competition-style tasks or sequential execution and provide limited support for parallel or hardware-specific evaluation. While a few benchmarks address parallel CPU programming (
-
 \cite{Nichols_2024}
 \cite{chaturvedi2024hpccoderv2studyingcodellms}
 ), GPU-targeted benchmarks remain scarce, despite the growing importance of hardware efficiency in deploying large-scale deep learning models.
 
 To address this gap, benchmarks like KernelBench
-
 \cite{ouyang2025kernelbenchllmswriteefficient}
 and TritonBench
-
 \cite{li2025tritonbenchbenchmarkinglargelanguage}
 have emerged, offering domain-specific assessments of LLM performance on GPU kernel generation. KernelBench
-
 \cite{ouyang2025kernelbenchllmswriteefficient}
 focuses on correctness and runtime efficiency across diverse workloads using metrics like "fast\_p", while TritonBench
-
 \cite{li2025tritonbenchbenchmarkinglargelanguage}
 highlights the challenges LLMs face in generating performant code for the Triton DSL. These benchmarks reveal a substantial gap between general-purpose code generation and the demands of high-performance, hardware-aware synthesis, underscoring the need for specialized, compute-oriented evaluation frameworks.
 \paragraph{LLMs for Code Generation}
 More recent work has explored the use of large language models for code generation, but often in general-purpose contexts with limited success on performance-critical low level code, such as DeepSeek-Coder
-
 \cite{guo2024deepseekcoderlargelanguagemodel}
 and Qwen-Coder
-
 \cite{hui2024qwen25codertechnicalreport}
 , which have achieved strong performance on broad coding benchmarks.
 
 There are also LLMs specifically trained for the kernel generation task, such as KernelLLM. However, its capability is limited to translating PyTorch code into Triton kernels, restricting its general applicability. In contrast, our agent can generate Triton code based on both natural language instructions and reference code, allowing for more flexible and context-aware code synthesis. Furthermore, specialized models like KernelLLM often lack the broader reasoning and problem-solving capabilities exhibited by larger state-of-the-art LLMs such as GPT-4.1 and Claude 4, which are critical for tackling complex optimization tasks involving multiple constraints and trade-offs.
 \paragraph{Inference-Time Compute Scaling}
 Inference-time compute scaling refers to the strategy of allocating increased computational resources---such as longer context windows, multiple reasoning passes, or parallel generations --- during the inference phase of machine learning models to boost performance on complex tasks. Notably, this approach enables significant improvements in large language model (LLM) performance without requiring additional training. For example, the Chain-of-Thought
-
 \cite{shinn2023reflexionlanguageagentsverbal}
 prompting technique enhances reasoning by encouraging models to answer questions in a step-by-step manner. Similarly, the Reflexion
-
 \cite{shinn2023reflexionlanguageagentsverbal}
 framework improves agent performance by integrating verbalized feedback into an episodic memory buffer, which guides more informed decision-making in future attempts. Our proposed GEAK agent also leverages inference-time compute scaling to improve code generation and optimization quality. In addition, we incorporate a Reflexion-style module for debugging, enabling the agent to iteratively refine its outputs based on past execution feedback.
 \section{Benchmarks}
@@ -119,7 +108,6 @@ We experiment with Triton kernel evaluation benchmarks, consisting of a modified
 The Triton kernels and corresponding evaluation codebase were borrowed and adapted from TritonBench but the following enhancements were made:
 
 37 out of the 184 kernels in TritonBench-G
-
 \cite{li2025tritonbenchbenchmarkinglargelanguage}
 had errors while running on AMD GPUs (such as Shared memory errors, invalid HIP arguments, ModuleNotFound). We fixed these kernel to be AMD GPU compliant.
 
@@ -135,7 +123,6 @@ For some kernels, unit tests were written inconsistently that produced unexpecte
 The following kernels have been written by Triton expert engineers and released publicly to help enable the ecosystem around running AI workloads efficiently on AMD GPUs. We also took assistance from frontier LLMs to refactor these, as well as their corresponding unit tests, in the same format as the TritonBench-revised benchmark. This enables us to compare the accuracy and efficiency of our agent in a consistent manner.
 \subsection{Evaluation Metrics}
 We use the same metrics as reported in TritonBench
-
 \cite{li2025tritonbenchbenchmarkinglargelanguage}
 \begin{itemize}
 \item Call Accuracy: Fraction of AI-generated kernels that can compile and run without any errors.
@@ -143,7 +130,6 @@ We use the same metrics as reported in TritonBench
 \item Speedup: Relative execution time improvement of AI-generated kernels over reference ground truth kernels. We define it as: expectation of the ratio of median reference kernel latency and generated kernel latency over all unit tests. Speedup is only computed for kernels that satisfy all unit tests.
 \end{itemize}\section{GEAK}\subsection{Pipeline}
 As shown in Figure
-
 \ref{fig:geak-pipeline}
 , the agentic AI system comprises four core modules: 1) Generator, 2) Reflector, 3) Evaluator, and 4) Optimizer. The Generator produces code based on user query and contextual information. The Evaluator follows a cascaded design: it first performs a functionality test to verify correctness. If the code fails this test, the corresponding error trace is fed back to the Reflector for further analysis. If the code passes, the Evaluator proceeds to assess its performance, including latency and memory efficiency. If the generated code fails to execute correctly, the Reflector analyzes both the code and the resulting error trace to identify potential issues. Finally, the Optimizer takes as input the functionally correct code and formulates strategies to enhance its performance with respect to latency and computational efficiency. To improve the performance of our agent, we employ some composable and configurable techniques as mentioned in below.
 \subsection{Modules}\paragraph{1- shot prompting}
@@ -152,36 +138,30 @@ To enable 1-shot prompting, the most similar Triton code from existing datasets 
 We enhance the prompt with domain-specific knowledge on writing efficient Triton kernels, including detailed hardware specifications. This incorporation of low-level optimization principles significantly improves the accuracy and quality of LLM-generated code.
 \paragraph{Reflexion}
 To enhance the system's self-correcting capabilities, we leverage a Reflexion
-
 \cite{shinn2023reflexionlanguageagentsverbal}
 module that supports introspective debugging and iterative refinement. When an LLM-generated kernel does not pass the functionality test, the resulting error trace is provided as feedback to the reflector for further analysis and correction. The agent is tasked with analyzing the cause of failure and proposing a corresponding solution. We scale the number of iterations to improve kernel generation.
 \paragraph{LLM selection for kernel agent}
 We have explored the use of multiple LLMs like GPT-4.1, O1 and Gemini 2.5 Pro. We observed significant variation in the outputs produced by different models, indicating that the capability of the underlying LLM can substantially influence the results.
 \paragraph{LLM as Optimizer}
 The Optimizer LLM is tasked with identifying potential optimization directions based on previous code generations and their corresponding performance metrics. These historical records, which include the generated code and associated performance results, are sorted in ascending order of performance. This structured presentation helps guide the LLM toward proposing more effective optimization strategies.
-
 \cite{yang2024largelanguagemodelsoptimizers}\paragraph{Debugging trap}
 When LLM's generated code has bugs, the error trace is provided to the Reflector for correction. However, we've observed that sometimes code can undergo several reflection cycles while still being plagued by the same bug, which is what we refer to as the debugging trap. To prevent the agent from getting stuck in a debugging trap, we impose a limit on the number of debugging attempts per code snippet using a parameter max\_perf\_debug\_num. If the code continues to fail after reaching this threshold, the agent is required to discard the current approach and generate a new strategy along with fresh code.
 \paragraph{Parallel Scaling}
 To ensure reliable kernel generation, we run multiple instances of GEAK multiple times in parallel and independently. To introduce diversity in the generated code, the LLM output is sampled with the parameter temperature set to 1. Our experiments show that such diversity in generation can yield correct and faster kernels otherwise underexplored. Moreover, further experiments indicate that combining sequential and parallel scaling yields additional performance improvements. To obtain unbiased estimates of accuracy, we estimate it using pass@k metric.
 \section{Experiments}\subsection{Main Results}
 We first establish our baseline by directly prompting frontier LLMs, such as GPT-4.1, Gemini 2.5 Pro, and Claude 3.7 Sonnet, to produce the kernels. As shown in Table
-
 \ref{tab:baselines}
 , across all models, direct prompting yields low execution accuracy and suboptimal performance, indicating that even state-of-the-art LLMs struggle to produce correct and efficient low-level code without further guidance.
 
 Introducing one-shot prompting---where a single example retrieved from TritonBench trainset is provided---consistently improves both call accuracy and execution accuracy compared to zero-shot prompting. In most cases, one-shot prompting also leads to higher speedup, suggesting that the additional context helps LLMs generate more efficient kernels. However, a notable exception is observed with Gemini 2.5 Pro, where one-shot prompting results in lower speedup than direct prompting, despite improvements in accuracy.
 
 Table
-
 \ref{tab:baselines}
 shows the direct prompting results on the ROCm benchmark. Direct prompting with GPT-4.1 fails to generate any valid kernels, underscoring the challenge of targeting non-CUDA platforms. In contrast, Gemini 2.5 Pro achieves better results than GPT-4.1 on both the TritonBench-revised and ROCm benchmarks, though the overall performance remains limited.
 
 As shown in Table
-
 \ref{tab:geak_on_tritonbench}
 and Table
-
 \ref{tab:geak_on_rocm_mi300}
 , compared to direct LLM prompting, our system GEAK delivers significantly stronger results. On MI300, GEAK achieves 54.89\% execution accuracy and a 2.59$\times$ speedup on TritonBench-revised Benchmark, and 63.33\% execution accuracy and 0.92x speedup on ROCm Benchmark, demonstrating the effectiveness of our agent framework. We also present a case study in Appendix
 
@@ -190,7 +170,6 @@ on $triton\_test\_flip.py$ kernel analyzing potential strategies for performance
 We investigate the impact of increasing inference-time compute on accuracy and performance, focusing on the sequential scaling dimension.
 
 The experimental results in Table
-
 \ref{tab:sequential_scaling_mi250}
 indicate that increasing the number of iterations leads to a steady improvement in both the accuracy and performance of GEAK. As the number of iterations increases, we observe a monotonic improvement in both call and execution accuracy, culminating at iter19 with 63.04\% call accuracy and 44.02\% execution accuracy---more than 3$\times$ higher than the baseline.
 
@@ -203,10 +182,8 @@ Overall, the analysis confirms that sequential compute budget is a powerful scal
 We demonstrate how increasing inference-time compute through parallel scaling improves both accuracy and performance. Specifically, we fix the number of sequential iterations to 10 and explore how varying the number of parallel runs during inference affects the results. Experiments are conducted on both MI250 and MI300 GPUs to ensure the findings generalize across hardware generations.
 
 Figure
-
 \ref{fig:fig1}
 and Figure
-
 \ref{fig:fig2}
 show inference time scaling laws on ROCm and TritonBench-revised benchmarks, respectively. Both call and execution accuracy scale almost log-linearly with respect to the number of parallel runs,
 
@@ -221,7 +198,6 @@ The substantial improvements in Call Accuracy relative to Execution Accuracy ind
 Finally, the scaling characteristics support GEAK's flexible architecture design, where parallel compute resources can be dynamically allocated based on task complexity and accuracy requirements. This adaptability ensures that the framework can optimize performance across different use cases while maintaining computational efficiency.
 \subsubsection{Effect of different Modules}
 To assess the contribution of individual components within our agent architecture, we conducted ablation experiments by evaluating performance across various combinations of modules. Results in Table
-
 \ref{tab:modules_ablation}
 show that each module---knowledge injection, one-shot, and Optimizer---contributes positively to both execution accuracy and speedup, highlighting the complementary roles these components play in enhancing the agent's overall performance.
 

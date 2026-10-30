@@ -253,6 +253,42 @@ def citekey(s):
     return k or "ref"
 
 
+# Blocks that are a *token* in the running text, not a paragraph of their own. The extractor splits
+# a sentence at every \cite/\ref, so "improvements through tricks \cite{a} and \cite{b}, while ..."
+# arrives as paragraph/citation/paragraph/citation/paragraph. LaTeX joins the pieces with a space
+# only if there is no blank line between them, so the template must not put one there.
+_INLINE_BLOCK_TYPES = {"citation", "figure_ref", "table_ref"}
+
+
+def annotate_block_separators(sections):
+    """Give each block a ``_sep``: the whitespace the template emits *before* it.
+
+    A paragraph block already ends with "\\n", and one more newline is what ends a LaTeX paragraph:
+    two consecutive paragraphs need it (they came from a blank line in the source). An inline block
+    (citation/reference) must not get it, because the blank line would split the sentence it belongs
+    to into a fragment with the citation number alone on the line. Every other boundary keeps the
+    newline, which TeX reads as a space.
+    """
+    out = []
+    for section in sections or []:
+        if not isinstance(section, dict):
+            continue
+        blocks, prev_type = [], None
+        for i, block in enumerate(section.get("blocks") or []):
+            if not isinstance(block, dict):
+                blocks.append(block)
+                continue
+            block = dict(block)
+            cur_inline = block.get("type") in _INLINE_BLOCK_TYPES
+            block["_sep"] = "" if (prev_type == "paragraph" and cur_inline) else "\n"
+            blocks.append(block)
+            prev_type = block.get("type")
+        section = dict(section)
+        section["blocks"] = blocks
+        out.append(section)
+    return out
+
+
 def graphic_path(s):
     """\\includegraphics target: whitespace and braces break it, so normalise and flag it."""
     p = str(s or "").strip().strip("{}")
@@ -447,7 +483,7 @@ def build_context(sir, fmt, warnings):
         "metadata": {"title": title, "authors": authors, "abstract": abstract,
                      "abstract_math_spans": md.get("abstract_math_spans") or [],
                      "keywords": md.get("keywords") or []},
-        "sections": sections,
+        "sections": annotate_block_separators(sections),
         "figures": sir.get("figures") or [],
         "tables": tables,
         "equations": sir.get("equations") or [],

@@ -66,7 +66,13 @@ MATH_ENVS = {"equation", "equation*", "align", "align*", "eqnarray", "eqnarray*"
              "displaymath", "math"}
 LIST_ENVS = {"itemize": "itemize", "enumerate": "enumerate", "description": "itemize"}
 FIGURE_ENVS = {"figure", "figure*", "wrapfigure", "float", "sidewaysfigure"}
-TABLE_ENVS = {"table", "table*", "longtable", "sidewaystable", "tabularx"}
+# Environments whose content *is* the tabular: they carry \begin/\end themselves and must be
+# captured whole. Before Session 9.6 only the float names were listed, so a bare \begin{tabular}
+# was recursed into as prose ("lrr Model EN-DE FLOPs ..." as one paragraph) and a longtable was
+# stored without its \begin, printing its cells as text.
+TABULAR_ENVS = {"tabular", "tabular*", "tabularx", "tabulary", "tabu", "supertabular",
+                "longtable"}
+TABLE_ENVS = {"table", "table*", "sidewaystable"} | TABULAR_ENVS
 SKIP_ENVS = {"abstract", "thebibliography"}          # consumed by metadata / references
 # Drawing instructions, not prose. Recursing into them turns diagram labels ("π_PC") into Unicode
 # text outside math; the templates do not load tikz, so the diagram cannot be reproduced anyway.
@@ -303,11 +309,30 @@ def extract_math_spans(text: str, warnings: list = None):
     return out, spans
 
 
+# A bounding-box list that reached prose instead of staying in a layout tool. The nips_2017 source
+# defines \todo[1]{\textcolor{red}{[[#1]]}}, and any macro that wraps its argument in [[...]] --
+# a todo marker, a PDF-coordinate dump pasted into the source -- survives latex_to_text(), which
+# strips the control sequence but keeps the argument. Emitting it puts literal
+# "[[76, 877, 488, 906], [506, 182, 918, 211]]" in the PDF, so it is scrubbed from every field
+# that goes through text_with_math(). Two or more integer quadruples are required, which no
+# legitimate prose or math text matches.
+_BBOX_ARTIFACT_RE = re.compile(
+    r"(?:text)?\[" + r"\s*\[" + r"\s*-?\d+(?:\.\d+)?" + r"(?:\s*,\s*-?\d+(?:\.\d+)?){3}" + r"\s*\]"
+    + r"(?:" + r"\s*,\s*\[" + r"\s*-?\d+(?:\.\d+)?" + r"(?:\s*,\s*-?\d+(?:\.\d+)?){3}" + r"\s*\])+" + r"\s*\]")
+
+
+def scrub_layout_artifacts(s: str) -> str:
+    """Drop bounding-box lists that leaked out of a layout tool into prose."""
+    if not s or "[[" not in s:
+        return s
+    return norm_ws(_BBOX_ARTIFACT_RE.sub(" ", s))
+
+
 def text_with_math(raw: str, warnings: list = None):
     """Raw LaTeX -> (plain text with placeholders, math spans). The one entry point every
     text-bearing SIR field goes through since v2."""
     clean, spans = extract_math_spans(raw or "", warnings)
-    return norm_ws(latex_to_text(clean)), spans
+    return scrub_layout_artifacts(norm_ws(latex_to_text(clean))), spans
 
 
 # ---- paper-local macro definitions (schema v2) -----------------------------------------------
@@ -564,6 +589,59 @@ def _macro_args(text: str, name: str, flags: int = 0):
     return out
 
 
+_AUTHOR_SEP_RE = r"\\[aA][nN][dD]\b"
+
+# A trailing \AND block often carries the group affiliation rather than a person
+# ("\AND \\ Advanced Micro Devices, Inc. (AMD)"). Without this rule that line becomes an author
+# with no name/e-mail of its own (2507.23194 went from 10 authors to 11).
+_ORG_HINT_RE = re.compile(
+    r"\b(?:University|Universit\w*|Institute|Institut|Department|Dept\.?|Laborator(?:y|ies)|Lab|"
+    r"Research|Corporation|Corp\.?|Inc\.?|Ltd\.?|LLC|GmbH|School|College|Faculty|Center|Centre|"
+    r"Academy|Hospital|Foundation|Company)\b", re.I)
+
+
+def _author_rows(raw: str):
+    """Split an author chunk on top-level ``\\\\`` line breaks, brace-aware.
+
+    ``split_top_level`` cannot do this: it consumes a backslash pair as an escape before it
+    consults the separator pattern, so ``\\\\`` never matches there. Lines are what separates a
+    name from its affiliation and e-mail in the NIPS/ICML ``\\author`` layout.
+    """
+    parts, last, depth, i, n = [], 0, 0, 0, len(raw)
+    while i < n:
+        c = raw[i]
+        if c == "\\" and i + 1 < n:
+            if raw[i + 1] == "\\":
+                if depth == 0:
+                    parts.append(raw[last:i])
+                    last = i + 2
+                i += 2
+                continue
+            if not raw[i + 1].isalpha():
+                i += 2
+                continue
+        if c == "{":
+            depth += 1
+        elif c == "}":
+            depth = max(0, depth - 1)
+        i += 1
+    parts.append(raw[last:])
+    return [p for p in parts if p.strip()]
+
+
+def _clean_author_field(s: str) -> str:
+    r"""Drop superscript affiliation markers from a name/affiliation string.
+
+    ``^1University of Illinois Chicago`` is how nips_2017-style blocks attach \inst numbers to the
+    institute line. LaTeX reads the bare ``^`` as a math superscript ("Missing $ inserted"), and the
+    marker itself carries no meaning once the affiliation is separated from the name.
+    """
+    s = re.sub(r"\^\s*\d+", "", s or "")
+    s = re.sub(r"\^\s*\{[^{}]*\}", "", s)
+    s = s.replace("^", "")
+    return norm_ws(s)
+
+
 def parse_authors(author_src: str, institute_src=None):
     """``\\author`` -> [{name, affiliation, email}].
 
@@ -571,20 +649,33 @@ def parse_authors(author_src: str, institute_src=None):
     with ``\\inst{n}`` markers, so a lone chunk is split on top-level commas. ACM uses
     ``\\affiliation{\\institution{X}}``; llncs puts the institutions in a parallel ``\\institute``
     block whose ``\\and``-split entries line up with ``\\inst{n}`` indices.
+
+    The separator is matched case-insensitively (``\\and``/``\\And``/``\\AND``): nips_2017 papers
+    mix all three, and a case-sensitive match silently merged eight authors into one. Footnote
+    markers are dropped *including their optional argument* -- ``\\footnotemark[1]`` otherwise
+    leaves a literal ``[1]`` glued to the name.
     """
-    chunks = split_top_level(author_src, r"\\and\b") or [author_src]
+    chunks = split_top_level(author_src, _AUTHOR_SEP_RE) or [author_src]
     if len(chunks) == 1 and "," in chunks[0] and "\\inst" in chunks[0]:
         chunks = split_top_level(chunks[0], r",")
     institutes = []
     if institute_src:
-        for part in split_top_level(institute_src, r"\\and\b"):
+        for part in split_top_level(institute_src, _AUTHOR_SEP_RE):
             institutes.append(norm_ws(latex_to_text(re.sub(r"\\\\", " ", part))))
     authors = []
     for raw in chunks:
+        raw = re.sub(r"\\samethanks\s*(?:\[[^\]]*\])?", " ", raw)
+        raw = re.sub(r"\\footnotemark\s*(?:\[[^\]]*\])?", " ", raw)
+        raw = re.sub(r"\\footnotetext\s*(?:\[[^\]]*\])?\s*\{(?:[^{}]|\{[^{}]*\})*\}", " ", raw)
+        raw = re.sub(r"\\thanks\s*\{(?:[^{}]|\{[^{}]*\})*\}", " ", raw)
         email = None
         em = re.search(r"\\(?:email|Eprint|url)\s*\{([^{}]*)\}", raw)
         if em:
             email = em.group(1).strip()
+        else:
+            em = re.search(r"\\texttt\s*\{\s*([^{}\s]*@[^{}\s]*)\s*\}", raw)
+            if em:
+                email = em.group(1).strip()
         inst_idx = None
         im = re.search(r"\\inst\s*\{([^{}]*)\}", raw)
         if im:
@@ -600,15 +691,31 @@ def parse_authors(author_src: str, institute_src=None):
                 break
         if aff is None and inst_idx is not None and 0 <= inst_idx < len(institutes):
             aff = institutes[inst_idx]
-        name_src = raw
+        rows = _author_rows(raw)
+        name_src = rows[0] if rows else raw
+        if aff is None:
+            rest = [r for r in rows[1:]
+                    if not re.search(r"\\texttt\s*\{[^{}]*@|\\url\s*\{", r)]
+            rest = [_clean_author_field(latex_to_text(r)) for r in rest]
+            rest = [r for r in rest if r]
+            if rest:
+                aff = rest[0]
+        elif aff:
+            aff = _clean_author_field(aff)
         for drop in (r"\\inst\s*\{[^{}]*\}", r"\\orcidlink\s*\{[^{}]*\}",
-                     r"\\thanks\s*\{(?:[^{}]|\{[^{}]*\})*\}", r"\\footnote\s*\{(?:[^{}]|\{[^{}]*\})*\}",
+                     r"\\footnotemark\s*(?:\[[^\]]*\])?", r"\\footnote\s*\{(?:[^{}]|\{[^{}]*\})*\}",
                      r"\\email\s*\{[^{}]*\}", r"\\affiliation\s*\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\}",
                      r"\\url\s*\{[^{}]*\}", r"\$?\^[^$]*\$?", r"\\textsuperscript\s*\{[^{}]*\}",
-                     r"\\\\", r"\\dagger\b", r"\\thanks"):
+                     r"\\texttt\s*\{[^{}]*\}", r"\\hspace\*?\s*\{[^{}]*\}", r"\\hfill\b",
+                     r"\\quad\b", r"\\qquad\b", r"\\\\", r"\\dagger\b", r"\\thanks"):
             name_src = re.sub(drop, " ", name_src)
         name = norm_ws(latex_to_text(name_src))
         if name:
+            if (len(rows) <= 1 and aff is None and email is None and authors
+                    and _ORG_HINT_RE.search(name)):
+                if not authors[-1]["affiliation"]:
+                    authors[-1]["affiliation"] = name
+                continue
             authors.append({"name": name, "affiliation": aff or None, "email": email or None})
     return authors
 
@@ -835,7 +942,7 @@ def parse_figure(inner: str, warnings: list):
     return fig
 
 
-def parse_table(inner: str, warnings: list):
+def parse_table(inner: str, warnings: list, env: str = None, whole: str = None):
     tab = {"label": None, "caption": None, "latex": ""}
     cap = re.search(r"\\caption\s*(?:\[[^\]]*\])?\s*\{", inner)
     if cap:
@@ -847,17 +954,22 @@ def parse_table(inner: str, warnings: list):
         tab["caption"], spans = text_with_math(text, warnings)
         if spans:
             tab["math_spans"] = spans
-    body = re.search(r"\\begin\s*\{((?:tabular|tabularx|array|nicematrix|bmatrix|IEEEeqnarray)"
-                     r"\*?)\}\s*(?:\[[^\]]*\])?\s*\{", inner)
-    if body:
-        envname = re.match(r"\\begin\s*\{([^}]*)\}", body.group(0)).group(1)
-        end, _ = find_env_end(inner, body.end(), envname)
-        tab["latex"] = inner[body.start(): end + len(envname) + 6].strip() if end > 0 \
-            else inner[body.start():].strip()
+    if env in TABULAR_ENVS:
+        # The environment itself is the table: keep begin/end and every cell byte for byte.
+        tab["latex"] = (whole if whole is not None else inner).strip()
     else:
-        tab["latex"] = inner.strip()
-        if inner.strip():
-            warnings.append("table without a tabular environment")
+        body = re.search(r"\\begin\s*\{((?:tabular|tabularx|array|nicematrix|bmatrix|IEEEeqnarray"
+                         r"|longtable|tabulary|tabu|supertabular)\*?)\}\s*(?:\[[^\]]*\])?\s*\{",
+                         inner)
+        if body:
+            envname = re.match(r"\\begin\s*\{([^}]*)\}", body.group(0)).group(1)
+            end, _ = find_env_end(inner, body.end(), envname)
+            tab["latex"] = inner[body.start(): end + len(envname) + 6].strip() if end > 0 \
+                else inner[body.start():].strip()
+        else:
+            tab["latex"] = inner.strip()
+            if inner.strip():
+                warnings.append("table without a tabular environment")
     if not tab["label"]:
         lab = _LABEL_RE.search(inner)
         if lab:
@@ -1248,7 +1360,7 @@ def scan_blocks(text: str, ctx: dict, depth: int = 0):
                     if f["label"]:
                         ctx["labels"].setdefault(f["label"], f["caption"] or "")
             elif env in TABLE_ENVS:
-                t = parse_table(inner, ctx["warnings"])
+                t = parse_table(inner, ctx["warnings"], env=env, whole=text[start:end])
                 if t["label"] or t["caption"] or t["latex"]:
                     ctx["tables"].append(t)
                     if t["label"]:
