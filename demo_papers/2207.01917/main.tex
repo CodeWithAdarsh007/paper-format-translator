@@ -1,0 +1,956 @@
+\documentclass{article}
+
+%MACROS FOR REVIEWING
+\usepackage{todonotes}
+\newcommand{\ak}[1]{{\textcolor{blue}{#1}}}
+%\newcommand{\ak}[1]{{\textcolor{black}{#1}}} % to show FT's additions without colour
+\newcommand{\akcom}[2][]{\todo[author=AK, #1]{#2}}
+%\newcommand{\akcom}[2][]{} % to hide AK's comments
+\newcommand{\akdel}[1]{\textcolor{olive}{$\times$ #1}}
+%\newcommand{\akdel}[1]{} %to hide what is deleted by FT
+
+\newcommand{\ft}[1]{{\textcolor{red}{#1}}}
+%\newcommand{\ft}[1]{{\textcolor{black}{#1}}} % to show FT's additions without colour
+\newcommand{\ftcom}[2][]{\todo[author=FT, #1]{#2}}
+%\newcommand{\ftcom}[2][]{} % to hide FT's comments
+\newcommand{\ftdel}[1]{\textcolor{olive}{$\times$ #1}}
+%\newcommand{\ftdel}[1]{} %to hide what is deleted by FT
+
+\newcommand{\node}[1]{\ensuremath{n}_{#1}}
+
+
+
+
+% if you need to pass options to natbib, use, e.g.:
+%     \PassOptionsToPackage{numbers, compress}{natbib}
+% before loading neurips_2019
+
+% ready for submission
+% \usepackage{neurips_2019}
+
+% to compile a preprint version, e.g., for submission to arXiv, add add the
+% [preprint] option:
+% \usepackage[preprint]{neurips_2019}
+
+% to compile a camera-ready version, add the [final] option, e.g.:
+%     \usepackage[final]{neurips_2019}
+
+% to avoid loading the natbib package, add option nonatbib:
+\usepackage[preprint, nonatbib]{neurips_2019}
+\usepackage{wrapfig}
+\usepackage[utf8]{inputenc} % allow utf-8 input
+\usepackage[T1]{fontenc}    % use 8-bit T1 fonts
+\usepackage{hyperref}       % hyperlinks
+\usepackage{url}            % simple URL typesetting
+\usepackage{booktabs}       % professional-quality tables
+\usepackage{amsfonts}       % blackboard math symbols
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\newtheorem{asu}{Assumption}
+\newtheorem{clm}{Claim}
+\newtheorem{prp}{Proposition}
+\newtheorem{dfn}{Definition}
+\usepackage{xcolor}
+\usepackage{float}
+\usepackage{subfig}
+\usepackage{algorithm}
+\usepackage[noend]{algpseudocode}
+\usepackage{graphicx}
+\usepackage{graphics}
+\usepackage{nicefrac}       % compact symbols for 1/2, etc.
+\usepackage{microtype}      % microtypography
+\usepackage{wrapfig,lipsum,booktabs}
+
+% \title{AGILE: Architecture Agnostic Global-Inspired Local Explanations}
+\title{GLANCE: Global to Local Architecture-Neutral Concept-based Explanations}
+% for CNN\ft{-based deep classifiers}}
+% \title{ANGLE: Architecture Neutral Global-Inspired Local Explanations}
+
+% The \author macro works with any number of authors. There are two commands
+% used to separate the names and addresses of multiple authors: \And and \AND.
+%
+% Using \And between authors leaves it to LaTeX to determine where to break the
+% lines. Using \AND forces a line break at that point. So, if LaTeX puts 3 of 4
+% authors names on the first line, and the last on the second line, try using
+% \AND instead of \And before the third author name.
+
+\author{%
+  Avinash Kori\\
+  Department of Computing\\
+  Imperial College London\\
+  \texttt{a.kori21@ic.ac.uk} \\
+  % examples of more authors
+  \And
+  Ben Glocker\\
+  Department of Computing\\
+  Imperial College London\\
+  \texttt{b.glocker@ic.ac.uk} \\
+  \And 
+  Francesca Toni\\
+  Department of Computing\\
+  Imperial College London\\
+  \texttt{f.toni@ic.ac.uk} \\
+}
+
+\begin{document}
+
+\maketitle
+
+
+\begin{abstract}
+% The black-box nature of deep learning models prevents them from being completely trusted or deployed in a high stake decision making scenarios. 
+Most of the current explainability techniques focus on capturing the importance of features in input space. 
+However, given the complexity of models and data-generating processes, the resulting explanations are far from being `complete', in that they lack an indication of feature interactions and visualization of their `effect'.
+In this work, we propose a novel twin-surrogate explainability framework to explain the decisions made by any CNN-based image classifier (irrespective of the architecture). 
+For this, we first disentangle latent features from the classifier, followed by aligning these features to observed/human-defined `context' features.  
+These aligned features form semantically meaningful concepts that are used for extracting a causal graph depicting the `perceived'  data-generating process, describing the inter- and intra-feature interactions between unobserved latent features and observed `context' features.
+This causal graph serves as a global model from which local explanations of different forms can be extracted.
+Specifically, we  provide a generator to visualize the `effect' of interactions among features in latent space and draw feature importance therefrom as local explanations.
+Our framework utilizes adversarial knowledge distillation to faithfully learn a representation from the classifiers' latent space and use it for extracting visual explanations. 
+We use the styleGAN-v2 architecture with an additional regularization term to enforce disentanglement and alignment.
+We demonstrate and evaluate explanations obtained with our framework on Morpho-MNIST and on the FFHQ human faces dataset.
+Our framework is available at \url{https://github.com/koriavinash1/GLANCE-Explanations}
+\end{abstract}
+
+
+
+\section{Introduction}
+
+% \ftcom[inline]{I would replace ``weightage'' with ``weight'' everywhere (it is shorter and more standard in my experience). AK: done}
+Deep learning models have emerged as powerful tools for solving complex problems in diverse domains in the past decade, and still, they are considered as \textit{black-boxes} due to their lack of interpretability.
+At the same time, there is a consensus among researchers, ethicists,  policy makers and the public on the need for explainability of these models, especially in high-stake applications like bio-medicine and autonomous driving \cite{doshi2017role, kroll2015accountable}.
+Explaining decisions made by deep learning classifiers can not only help us understand the underpinning mechanism but also uncover model biases \cite{kim2018interpretability}, which helps in better understanding the data-generating process \cite{narayanaswamy2020scientific}.
+There are many different forms of explainability techniques, including feature attribution methods \cite{ribeiro2016should}, network dissection-based interpretability \cite{bau2017network}, mechanistic approaches for understanding neural networks \cite{olah2017feature, olah2020zoom}, and causal/counterfactual explanations \cite{sauer2021counterfactual, chang2018explaining, pawlowski2020dscm}. 
+In this paper, we contribute to this landscape by defining a novel method for obtaining concept-based explanations.
+
+Interpretability can be divided into two categories \cite{lipton2018mythos}: transparency and \emph{post-hoc explanations}; most of the above mentioned techniques fall under the latter category, as does our proposed framework.
+Many existing frameworks for post-hoc explainability do not reflect concept-based thinking of the kind exhibited by humans \cite{armstrong1983some}, with a few recent exceptions. \cite{ghorbani2019towards} shows the existence of these concepts, while \cite{kori2020abstracting} uses the idea of both existence and interaction between concepts to generate explanations.
+Our proposed framework generates concept-based explanations using unobserved latent and observed context features as concepts and identifying interactions between them.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=1\textwidth]{imgs/overview.png}
+    \caption{Overview of the proposed framework, in which %both 
+    the feature extractor ($\Phi_f$) and the feature classifier ($\Phi_c$) are blocks %within 
+    of a trained, given classifier model (
+    %\ft{ referred to as the classifier} 
+    $\Phi_C$).
+    The feature disentanglement ($\Phi_d$), feature alignment
+    ($\Phi_a$), and generator
+    ($\Phi_g$)  blocks are part of our proposed twin-surrogate model. The causal graph extraction and feature attribution blocks, together with the generator, provide  our explanations.}
+    \label{fig:overview}
+    \vspace{-15pt}
+\end{figure}
+
+% \ftcom[inline]{The first two sentences below seem out of place to me - as you are not doing counterfactual explanations. I would start with the third sentence - introducing it with something like `Within the filed of explainable AI,'. I would also drop sentences 4 and 5 - or adjust them...  AK: I included the counterfactual in explanations point of contributions}
+Among the different forms of explanations, counterfactual explanations are recently gaining attention \cite{sauer2021counterfactual, chang2018explaining, nemirovsky2020countergan, lang2021explaining}.
+These help us analyse a classifier by constructing hypothetical scenarios and observing classifier predictions.
+At the same time, the language of causality is advocated as a precise and powerful way of extracting explanations \cite{o2020generative}.
+Counterfactual explanations can be drawn by intervening on the set of features in the data-generating process to construct hypothetical scenarios.
+The effectiveness of counterfactual explanations solely depends on an intuitive difference between original and intervened data. 
+%
+In this work, we focus on generating \emph{causal graphs} using unobserved latent features which may or may not be human understandable and 
+%\akcom{Observed implies human observed I don't think we need to mention human-}\ft{human-}
+observed {context features} to model the data-generating process as perceived by the underlying model. The causal graph then serves as the basis for our explanations.
+
+Methodologically, we use a twin-surrogate model based on disentanglement, alignment, and generator blocks as %\ftdel{illustrated} 
+overviewed in Figure \ref{fig:overview}.
+The generator is implemented as an extension of styleGAN-v2 \cite{karras2020analyzing} augmented to incorporate additional blocks for disentanglement and alignment.
+% \ftcom{I can see what Ben means, as minimising loss pushes towards but does not formally guarantee? my suggested change is neutral? (sorry guys I can see your overleaf comments but have issues using them in my system)} 
+We explore the latent space for causal discovery by following an intervention-based method, considering the trained twin-surrogate as an oracle to be consulted on the effects of interventions. 
+%\ftcom{trying to address Ben's comment - clear to me - as in complexity theory}.
+The generator is used to extract counterfactual visual explanations to understand the `effect' of feature behaviour and interactions in causal discoveries.
+% \ftcom[inline]{the description of the method is unclear to me - I would refer to Fig 1 and make sure that you use the same terminology here as there - which bit is the styleGAN-v2 block? which bits are new and which adapted?}
+
+Our goal in this work is to explain what a given CNN-based classifier learns, rather than explaining the true label.
+We achieve this by learning a `pseudo' data-generating process along with a feature interaction graph,\footnote{By \textit{pseudo} we mean a data-generating process as perceived by the given classifier model.}  which serves as a \emph{global} ground for extracting our \emph{local} explanations (for given inputs).
+These feature attribution based explanations respect the feature interactions in the extracted graph. The global and local explanations can be seen as two layers in a hierarchy, with the local explanations providing finer-grained information about the weight of features and their influence on the classifier's prediction, while reflecting the interactions in the global graph.
+We  demonstrate and evaluate the effectiveness of our framework on Morpho-MNIST \cite{castro2019morpho}, a synthetic dataset based on MNIST \cite{deng2012mnist}, and the FFHQ dataset \cite{karras2019style}, a dataset with high quality human faces and attributes corresponding to facial features.
+%
+Overall, our contribution in this work is threefold:
+\begin{itemize}
+\item \textbf{Twin-surrogate model \ref{subsec:surrogate}:} we propose a novel twin-surrogate model which extends on the styleGANv2 framework for disentangling and aligning latent features for generating the classifier perceived data-generation process.
+\item \textbf{Causal graph extraction \ref{subsec:graphs}:} we formalize a method to facilitate causal discovery of feature interactions among unobserved latent features and context features (focusing on causal structure rather than functional mechanisms). 
+\item \textbf{Explanations \ref{subsec:exp}:} we propose a novel form of explanation that follows hierarchical steps of (i) global graph generation, capturing causal relationships as perceived by the model, and (ii) local feature attributions for a given input image along with a way to visualise and analyse feature interactions via counterfactuals.
+\end{itemize}
+
+
+% \ftcom[inline]{Fig. 1 talks about counterfactual explanations too, but the description about your contributions does not mention them - nor does realted work. The reader is left wondering: are you or not doing CFXs? I would drop the counterfactual mention in the figure, and discuss how to obtain CFXs as future work - all the experiments are about feature attribution AK: I updated the figure and contributions accordingly}
+% \ftcom[inline]{no mention of twin-surrogate in the introduction? it is mentioned in the abstract, thus one somewhat expects it....}
+% \akcom{I have introduced twin surrogate in methodology paragraph now}
+
+
+\section{Related work}
+% \akcom{I'm not hyphenating feature attribution, let me know if that is required}
+Our method falls within an active field of research on post-hoc explainability for deep learning models.
+Most post-hoc explainability methods can be categorized as (local or global) feature attribution-based or counterfactual explanations. 
+% \ftdel{Some might argue that counterfactual explanations are a subset of feature attribution; here, we consider them as two separate methods. }\ftcom{unless you put a reference here this is a potentially dangerous comment}
+Both feature attribution \cite{lime, SHAP} and counterfactual explanations \cite{goyal2019counterfactual, denton2019detecting} have proved to be useful methods to interpret the reasons for models decisions.
+Feature attribution mainly focuses on estimating the importance weight for input features, indirectly indicating how features influence final decisions. 
+In the case of images, features correspond to parts or patches of images responsible for the classifier's decisions \cite{lime}.
+On the other hand, counterfactual explanations are influenced mainly by hypothetical \emph{``what-if''} scenarios. 
+In case of generating counterfactual explanations for images,
+% \ftcom{which field? CF explanations in general? when you operate with images?} 
+black-box models are usually explained via \emph{twin-surrogate} models to provide visual explanations with desired latent properties \cite{dhurandhar2018explanations, denton2019detecting, goyal2019counterfactual, joshi2019towards, razavi2019generating, lang2021explaining}.
+% \ftcom{you need to provide references here, I for one do not buy this; this is certainly not true for tabular data, so you need to narrow it down and also provide references}
+Most of these methods train generators from scratch, leading to explanations that are more \emph{faithful} to the given dataset than to the trained classifier. 
+Some of these methods aim to generate samples that affect the classifier's decision \cite{dhurandhar2018explanations, joshi2019towards}, while others work on changing the latent space and observing the classifier’s decision change \cite{denton2019detecting}. 
+%
+The main focus in the case of twin-surrogate model-based explanations is to extract disentangled representations \cite{higgins2016beta}.
+% or define structural causal models (SCM)
+% \ftcom{what is this? define acronym - if really needed - and use consistently} 
+% for the underlying data-generating process and use them to perform interventions \cite{pawlowski2020dscm}. %\ftcom{this sentence needs a reference}.
+As there exist infinitely many possibilities to disentangle features, it has been shown that disentanglement without supervision is a challenging problem \cite{locatello2019challenging}.
+Recent findings suggest that limited supervision can restrict the search space and 
+% \ftdel{help in obtaining disentangled features \cite{locatello2020weakly}. Limited supervision} 
+can be used on a subset of latent features to optimize them to align towards desired properties \cite{locatello2020weakly}. 
+
+Our work focuses on both feature attribution and the use of twin-surrogate models to derive faithful explanations.
+Instead of training twin-surrogate models from data, we distill knowledge from the pre-trained classifier, making use of a generator to depict the classifier's perceived data-generating process.
+We use the latent features from a the distilled model to determine the feature interactions, which is used to obtain counterfactual visual explanations and feature attributions indicating the contribution of each latent feature in towards the classifiers output. 
+%\ft{, while reflecting interactions between these features based on a causal graph extracted from the distilled model}.
+
+
+\section{Methods} 
+
+% \subsection{Overview}
+% \label{subsec:overview}
+
+
+In this section we describe the methods underpinning our explainability framework, aiming to demystify a given classifier by distilling it's knowledge into a twin-surrogate model, first learning to disentangle and align features, followed by causal discovery and generation of visual explanations.
+The proposed method consists of five building blocks, as illustrated in Figure ~\ref{fig:overview}; the individual blocks are responsible for: (i) learning a disentangled representation, (ii) aligning disentangled features to observed context features, (iii) learning a generative decoder for visual explanations, (iv) constructing a causal graph, and, finally (v) deriving explanations.
+Next, we explain each step in more detail.
+
+\subsection{Preliminaries and notations}
+\label{subsection:prelims_notations}
+Let $\mathcal{D} \subseteq \mathcal{X} \times \mathcal{Y}$ be the dataset, such that elements of $\mathcal{X}$ are in  $\mathbb{R}^{s \times s}$ and $\mathcal{Y} %\in 
+= \{1, \ldots, N\}$, where $s \times s$ and $N$ correspond to the dimension of an input image and total number of classes, respectively.
+
+Now, we define notations used to describe all the model components shown in Figure \ref{fig:overview}: (i) the pre-trained classifier is denoted by $\Phi_C: \mathcal{X} \rightarrow \mathcal{Y}$; (ii) the encoder block maps the classifiers' latent space to the required dimension\, denoted as $\Phi_e:\mathcal{E} \rightarrow \mathcal{E}'$, where elements of  $\mathcal{E}$ are in $\mathbb{R}^l$ and elements of $\mathcal{E}'$ are  in $\mathbb{R}^m$, with $m<l$  and, typically, $l,m \geq N$ - here $l$ corresponds to the dimension of the latent vectors and $m$ corresponds to; (iii) the disentanglement block is denoted by $\Phi_d: \mathcal{E}' \rightarrow \mathcal{E}'$ -  this block also serves as a modulator layer as proposed in styleGAN-v2 \cite{karras2020analyzing}; (iv) the alignment block helps in mapping the disentangled latent space to a human-understandable latent space with the help of observed context features, denoted as $\Phi_a: \mathcal{E}' \rightarrow \mathcal{E}'$; and (v) the generator block is used to construct visual explanations from latent space, denoted by $\Phi_g: \mathcal{E}' \rightarrow \mathcal{X}$.
+
+\begin{asu} 
+\label{assumption:classifier_decomposition}
+%In this work 
+We restrict %all 
+our analysis %on 
+to
+classifiers that can be decomposed as $\Phi_C = \Phi_c \circ \Phi_f$, where feature extractor $\Phi_f:\mathcal{X} \rightarrow \mathcal{E}$ maps input images to latent vectors %$\mathcal{E} \in \mathbb{R}^l$ 
+and feature classifier $\Phi_c:\mathcal{E} \rightarrow \mathcal{Y}$ maps the latent space to class labels.
+%In the above formulation, $l$ corresponds to the dimension of the latent vector, typically $l \geq N$.
+\end{asu}
+
+\textit{Remark}: This assumption requires the last block or layer of the classifier to map from embedding space to output space linearly; this is crucial because our methods use the embedding space to explain the decision made by the classifier. The assumption holds for many state-of-the-art classifiers.
+% \ftcom[inline]{there are many models around in the framework - better to call them by their role? (classifier, generator etc)}
+
+
+
+\subsection{Twin-surrogate model}
+\label{subsec:surrogate}
+Our explainability framework involves learning a twin-surrogate model with a definite set of properties. 
+The main properties of a twin-surrogate model that we consider are (i) feature disentanglement, (ii) feature alignment, and (iii) an ability to generate visual explanations.
+% \ftcom{'generator' is not a property properly speaking? may be generation ability? otherwise may be `abilities' or 'functionalities' may be more appropriate than 'properties'?}.
+Because feature disentanglement helps us construct a set of independent features responsible for the data-generating process, the feature alignment property transforms those obtained features into semantically meaningful features, and the generator helps us to obtain visual explanations, explaining these features.
+% the effect \ftcom{not sure about what 'effect of' means here: possibly drop, if not absolutely essential? } of these features.
+Due to feature disentanglement and generator, our implicit choice of model reduced to variational auto-encoders \cite{kingma2019introduction} or generative models \cite{goodfellow2014generative}. 
+We adopt the discoveries from \cite{locatello2019challenging}, which shows how variational and adversarial training encourages models to learn disentangled representations implicitly.
+We further decided on the styleGAN-v2 \cite{karras2020analyzing} architecture because of its property to generate large scale images and disentangle latent space using path length regularization.
+However, we noticed that some of the learned representations by styleGAN-v2 have a high correlation with others, and thus are not semantically meaningful; we experimentally demonstrate this in our analysis in appendix \ref{section:appendix}. 
+To address this issues, we introduce an alignment block with additional loss to enforce independence and feature alignment. 
+
+Let $\Phi_{sg}: \mathcal{E}' \rightarrow \mathcal{X}$ be %is
+the styleGAN-v2 framework, which, by construction, can be decomposed as $\Phi_{sg} = \Phi_{g} \circ \Phi_d$, where $\Phi_d$ and $\Phi_{g}$ correspond to the modulator and generator, respectively, as described in \cite{karras2020analyzing}. 
+We define an alignment block $\Phi_{a}$, which maps disentangled features to semantically meaningful features with respect to observed context features, resulting in a decomposable generator model that can be described as $\Phi_{sg}' = \Phi_g \circ \Phi_a \circ \Phi_d$. 
+
+Now, we describe the properties and assumptions considered in the construction of the alignment block.
+Let $\mathcal{E}'_o, \mathcal{E'}_u$, correspond to \emph{context features} (i.e. observed, human-understandable features in the data-generating process)  and (unobserved) \emph{latent features} such that $\mathcal{E}'_o \subset \mathcal{E}'$, $\mathcal{E}_u \subset \mathcal{E}'$ and $\mathcal{E}'  = \mathcal{E}'_o \cup \mathcal{E}'_u$.
+% \ftcom{Just to make sure I understand:  $\mathcal{E}'$  is a set of vectors  - and here you are partitioning this set into two parts: a (smallish) set of vectors for observed and a (bigger) set of vectors for unobserved features. Correct? AK: yes exactly}
+Typically $|\mathcal{E}'_o| < |\mathcal{E}'_u|$, namely the number of context features is less than the number of unobserved latent features: this makes our alignment task a problem of subspace alignment.
+% \cite{} shows us how every weight layer in a network can be viewed as an associative memory that stores key-value pairs, here, we can consider an alignment block to be an associative memory mapping the subspace of a linear combination of disentangled features and observed context features.
+
+
+
+% \begin{asu}
+% \label{assumption:causal_depth}
+% We assume that the depth of the causal relationship expressed by context features is complete. 
+% In other words, our framework extracts causal relationships at max up to the same depth as expressed by context features.  
+% \end{asu}
+
+% \textit{Remark:} In our construction of the alignment block, the number of layers corresponds to the observed depth of causal relations.
+% For example, In case-study one \ref{sec:casestudy1}, we generate a synthetic dataset using Morpho-MNIST \cite{castro2019morpho}. 
+% By construction of this dataset, we know that thickness affects slant and width, and width affects intensity, which corresponds to \textit{depth=3} causal structure.
+% To accommodate this in our framework, we use three layers in the alignment block, where layer one corresponds to thickness, layer two corresponds to slant and width, and the final layer corresponds to intensity.
+% This assumption is particularly useful for the construction of alignment block.
+
+
+\begin{asu}
+\label{assumption:depth_independence}
+In the case of feature alignment, we assume that the given observed \emph{context features} follow a Directed Acyclic Graph (DAG) structure.
+% We construct multi-layered alignment blocks to accommodate the higher-order dependencies among context features.  
+\end{asu}
+
+\textit{Remark:} Basically our framework works on DAGs, namely we assume that features responsible for the data-generating process do not form any cycles or self-loops.
+% \ft{contribute to}\ftcom{there was no verb here, not sure my choice is the best} any cycles or self-loops.
+% For example, In case-study one \ref{sec:casestudy1}, slant and width are independent of one another given thickness.
+
+% Based on an assumption \ref{assumption:causal_depth} and \ref{assumption:depth_independence} we decide on number of layer in our alignment block.
+Based on $\mathcal{E}'$s information, we propose an alignment regularization term with the following properties:
+\begin{itemize}
+    \item \textbf{Regularization should involve subspace optimization}, which makes use of observed ground-truth context features; this also forces the model to encode \textit{relations} between context features and the morphology of an image.% in an abstract sense.
+    \item \textbf{Regularization should impose orthogonality} on features in $\mathcal{E}'_u$ among each other and also with respect to features in $\mathcal{E}'_o$; this helps in optimizing all the parameters in our alignment block, while just aligning a subset of features.
+\end{itemize}
+
+Let $\mathcal{C}$ correspond to ground-truth context features, the set of observed human-understandable features; by assumption \ref{assumption:depth_independence} all the elements in $\mathcal{C}$ form a DAG.
+
+% \ftcom[inline]{Is the below a property you prove? or a definition? The use of ``proposition'' suggest the former, but is this correct? }
+
+\begin{dfn}
+The alignment of latent subspace to observed context features can be achieved by minimizing the L2 distance between the subspace of latent features and ground-truth context features.
+This corresponds to $||\mathcal{E}'_u - \mathcal{C}||^2_2$, constrained on $z_i \perp z_j$, where $z_i, z_j \in \mathcal{E}'_u$ and $i \neq j$.
+% \ftcom{To make sure I understand: $z_i, z_j$ are different vectors here. AK: yes}
+\end{dfn}
+
+\textit{Remark:} The orthogonality constraint helps in limiting possible combinations of disentangled vectors to form aligned vectors. 
+The alignment block is basically a linear transformation of disentangled features to match few observed context features, while  constraining on the rest.
+
+To apply the orthogonality constraint, we first compute and track the running mean of eigenvectors, and condition the output of the alignment block to move close towards the mean eigenvectors.
+We apply singular value decomposition (SVD) on matrix $M$, where $M$ is the submatrix of the batch output of the alignment block and $M \in \mathbb{R}^{b \times |\mathcal{E}'_o|}$, with $b$ being the  batch size used in training and $|\mathcal{E}'_o|$ corresponding to the number of observed context features and each row in $M \in \mathcal{E}'_u$. 
+% \ftcom{the next bits till the full stop do not seem to belong here, or a linguistic  transition is missing....} 
+The aim of the alignment block is to force $\mathcal{E}'_u$ to align towards the mean eigenvectors of $M$. 
+The SVD decomposition of $M$ can be described as $U\Sigma V^* = M$
+%\ftcom{does not match equation 1 below, where you have commas and SVD(M) - please write consistently. AK: fixed}
+, where $U, \Sigma, V^*$ correspond to left singular vectors, singular value matrix, and right singular vectors, respectively.
+Eigenvectors of $M$ can be computed by simply multiplying left singular vectors with singular value matrix.
+To control the maximum eigenvalue of unobserved latent features,  we normalize the eigenvector matrix ($U\Sigma$) with the Forbinious-norm $||.||_f$ of singular value matrix $\Sigma$.
+Equation \ref{eqn:alignmentloss}, describes the proposed alignment loss mathematically, where $\hat{U\Sigma}$ corresponds to the running mean of an eigenvector of matrix $M$, $\lambda_{max}$ corresponds to a hyper-parameter to control the maximum eigenvalue of $M$, and $\alpha$ corresponds to weighage term of orthogonal conditioning.
+The value of $\alpha$ is increased gradually from 0 to 1 with respect to training iterations (based on our experiments we found step based incremental function to work best). 
+
+\begin{align}
+    \begin{split}
+      U \Sigma V^* &=  SVD(M), \; M \in \mathbb{R}^{b \times |\mathcal{E}'_u|}\\
+    \mathcal{L}_{align} &= ||M - \mathcal{C}||^2_2 + \alpha \Big{\|}M - \frac{\lambda_{max} \hat{U\Sigma}}{||\Sigma||_f} \Big{\|}^2_2
+    \end{split}
+    \label{eqn:alignmentloss}
+\end{align}
+
+
+We use an adversarial training procedure to learn all encoder, disentanglements, alignment, and generative steps jointly. 
+As opposed to randomly sampling a noise vector for generating images, we condition our noise distribution on the feature extractor from a trained classifier $z \sim \mathcal{N}(\Phi_f(x), 0.1)$, where $x \in \mathcal{X}$ and $\mathcal{N}(.)$ is normal distribution with given parameters. 
+Due to this, our framework resembles an auto-encoder architecture with an additional discriminator and a fixed feature extractor; this requires an additional reconstruction loss term $\mathcal{L}_{recon}$ in training.
+This is done to distill knowledge from the trained classifier to generate explanations that are meaningful and faithful to the classifier, while preserving the properties of styleGAN-v2. 
+It is important to note that our generator here is reconstructing images as perceived by the classifier, not the original data.
+The reconstructed images only contain features that the classifier sees as important in making its decision. 
+% Figure \ref{fig:overview} describes the components used by the proposed explainability framework.
+The total generator loss is considered to be a linear combination of adversarial loss, reconstruction loss, path length, alignment loss, and cross-entropy loss, as follows:
+%\ftcom{there are mismatches with Fig.1: what is $\mathcal{L}_{recon}$ (I guess $\mathcal{L}_{rec}$? AK: corrected) also there is no $\mathcal{L}_{adv}$ in Fig.1? AK: that comes from styleGAN so didn't describe that} 
+$\mathcal{L}_{total} = \mathcal{L}_{adv} + \lambda_1 \mathcal{L}_{pl} + \lambda_2 \mathcal{L}_{align} + \lambda_3 \mathcal{L}_{recon} + \lambda_4 \mathcal{L}_{cls}$, where $\mathcal{L}_{cls}$ is cross-entropy loss applied on the classifier's prediction between original images and the classifier's perceived images, and the $\lambda_i$ are hyper-parameters to decide the weight for each loss component.
+The total loss can also be described as $\mathcal{L}_{total} = \mathcal{L}_{styleGANv2} + \lambda_2 \mathcal{L}_{align} + \lambda_3 \mathcal{L}_{recon} + \lambda_4 \mathcal{L}_{cls}$.
+% \ftcom{to be also matched with Fig.1. AK: done, L_styleGAN is implicit with styleGAN paper so didn't describe that (we also need to talk about discriminator in that case)}.
+% \ftdel{Where $\lambda_i$'s are hyper-parameters to decide the weight for each component in a loss.}
+We list all the hyper-parameters and other experimental specifications in appendix \ref{section:appendix}.
+
+\subsection{Causal graph extraction}
+\label{subsec:graphs}
+
+% Graphical models help us generate tractable and understandable ways to depict features and reason about their relationships. 
+% Recently, there has been a surge in interest for explainability or network interpretability using graphical approaches \cite{kori2020abstracting, o2020generative}.
+We use diversity in latent space to aid an explanation for a classifier's decisions.
+We argue that explaining via latent space features is more expressive compared to other feature attribution or saliency-based explanation methods.
+As our explanations adopt both global and local perspectives, graph extraction is the central aspect of global explanation generation.
+To extract a global graph, we take aligned latent features as the basic elements for constructing the pseudo data-generating process, which allows us to perform interventions and observe changes in the generated images.
+As the generator learns the data distribution, it implicitly encodes functional mechanisms/relationships between variables responsible for generating the data.  
+Here, we propose a method to extract feature interactions, without focusing on structural mechanisms.
+
+% \textbf{Structural Causal Model (SCM) :}
+% In a traditional setting SCM $\mathcal{M}$ is defined by a tuple $(\mathcal{V}, \varepsilon, \mathcal{F}, \mathcal{P}_\varepsilon)$, where $\mathcal{V} = \{v_1, v_2, ... , v_n\}$ and  $\varepsilon = \{ \epsilon_1, \epsilon_2, ..., \epsilon_n\}$ a set of random variables and exogenous noise variables respectively, $\mathcal{F} = \{f_1, f_2, ..., f_n \}$ defines a set of deterministic functions for each variable in $\mathcal{V}$, and $\mathcal{P}_\varepsilon$ defines a joint probability distribution for noise variables.
+% Since we are modeling SCM in a latent space, random variables and exogenous noise variables are coupled together; We propose the following properties for designing our SCM:
+% \begin{itemize}
+%     \item \textbf{Functional structure of an SCM should model noise couple variables.} This property allows us to use latent features as variables for modeling SCM.
+%     \item \textbf{Use of Implicitly learned functional mechanisms}. This property helps us use a trained modulator, aligner, and generator for functional mechanisms to model our SCM. 
+% \end{itemize}
+
+% \begin{prp}
+% Based on the above properties, we define SCM model as $\hat{\mathcal{M}} = (\hat{\mathcal{V}}, \Phi'_{sg}, \mathcal{P}_{\hat{\mathcal{V}}})$, where $\hat{\mathcal{V}} = \{\hat{v}_1, \hat{v}_2, ... , \hat{v}_n\} \in \Phi_a(\Phi_d(\Phi_e(z))) \quad z \sim \mathcal{N}(\Phi_f(x), 0.1)$ and $\mathcal{P}_{\hat{\mathcal{V}}}$ corresponds to noise distribution used as an input to our generative model.
+% \label{prp:scm}
+% \end{prp}
+
+% Probabilistically, $\Phi'_{sg}(.)$ models conditional data-distribution $\mathcal{P}(X | z)$, where $z \sim \mathcal{N}(\Phi_f(x), 0.1)$. 
+% This conditional can be further refactorized using encoder $e$ modulator $s$ and aligner $a$ variables, described as $\mathcal{P}(X | z) = \int_a \int_s \int_e \mathcal{P}(X | a) \mathcal{P}(a | s) \mathcal{P}(s | e) \mathcal{P}(e | z) \;ds\:da\:de$.
+% In our case, we perform interventions on $a$ and observe changes in a generated image by modifying $\mathcal{P}(a|s)$ distribution. 
+% To generate interventional distribution, we solve a constrained optimization problem, optimizing weights in alignment block to reduce the distance between an aligned feature vector and expected interventional feature vector while minimizing collateral damage on image generation as proposed in \cite{bau2020rewriting}. 
+%     The resulting optimization is described as:
+% $W_a^* = argmin_{W_a} ||(z; do(z_i=x) - \Phi_a(s)|| + \lambda||X - \Phi_g(\Phi_a(z ; do(z_i = x))||$, where $z=\Phi_a(s)$ and $\Phi_a(.)$ is a function of $W_a$.
+
+\textbf{Causal discovery and graph extraction: }
+% Our alignment blocks encode the observed depth of causal knowledge as described previously.
+We analyze the aligned features (ie., the output of the alignment block) to extract the learned relations among features represented as directed edges in a DAG.
+After training, we can access the \textit{pseudo} data-generating process (generator model) as an oracle and perform controlled interventional queries. 
+These amount to questions of the form \textit{``How would the generated image change if I change this particular feature?''}.
+We determine the existence of directed edges between features by comparing original and intervened latent feature values.
+Now we define some graph specific terms, which we use in our discovery step.
+
+% \ftcom[inline]{The below is definitely a definition - not a proposition}
+\begin{dfn}
+Node $\node{i}$ and node $\node{j}$ in a DAG
+are said to have a \emph{Direct Causal Path (DCP)} if there exists an edge between $\node{i}$ and $\node{j}$
+% \ftcom{changed nodes to $\node$ wih a subscript - but used a macro so easy to change - an alternative, possibly better choice may be to use just the subscript? as nodes are features which are positions in vectors...}  
+(either $\node{i} \rightarrow \node{j}$ or $\node{j} \rightarrow \node{i}$), and are said to have an \emph{Indirect Causal Path (ICP)} if their exists a trail from $\node{i}$ to $\node{j}$ via a third node $\node{k}$ (either $\node{i} \rightarrow \node{k} \rightarrow \node{j}$ or $\node{j} \rightarrow \node{k} \rightarrow \node{i}$).
+% \ftcom{You are excluding longer paths, with further nodes in between $\node{i}$ and $\node{j}$?. AK: I'm not excluding here it's just defined later in steps we define multiple steps to extract both DCP and ICP} 
+Finally, we define the \emph{edge-weight} for an edge between $\node{i}$ and $\node{j}$ as:
+\begin{equation}
+    EW(\node{i},\node{j}) \triangleq \mathbb{E}_{l=\Phi_a(\Phi_d(\Phi_e(z))), z \sim \mathcal{N}(\Phi_f(x), 0.1); x\sim \mathcal{X}} \frac{[\hat{l}_{j} - l_{j}]}{[\hat{l}_{i} - l_{i}]}
+    \label{eqn:edgeweightage}
+\end{equation}
+
+where $l_i$, $\hat{l}_i$ indicate the $i^{th}$ element in vectors $l$,$\hat{l}$, respectively (with position $i$ corresponding to node $\node{i}$ in the graph, similarly for $j$)
+and $\hat{l}$ is the \emph{intervened latent vector}, formally defined as  $\hat{l}= \Phi_a(\Phi_d(\Phi_e(z))); z \sim \mathcal{N}(\Phi_f(\Phi_g(l; do(l_i=I))), 0.1)$, for $I$ an intervention on $i$. 
+
+\label{prp:causalstructure}
+\end{dfn}
+
+
+% Previously, we assumed the disentanglement property \ref{assumption:depth_independence}; here, we justify that assumption with the proposed method of graph generation; if the features are truly independent, we should not observe any edges among the features $\mathcal{E}'_u$.
+% With the combined effect of the proposed alignment loss $\mathcal{L}_{align}$ and $\mathcal{L}_{pl}$ described in styleGAN-v2 \cite{karras2020analyzing}, we can see the emergence of disentangled features.
+% Later, in case study 1\ref{sec:casestudy1}, we compare the effect of both terms in feature dis-entanglement.
+Procedurally, for causal discovery via interventional queries, we propose the following steps (for simplicity, below we equate nodes and positions in vectors): 
+
+\begin{enumerate}
+    \item We extract the aligned feature vector by passing a sampled feature vector through a composite function of encoder, disentanglement and alignment, formally described as $l = \Phi_a (\Phi_d ( \Phi_e (z))); z \sim \mathcal{N}(\Phi_f (%X
+    x), 0.1)$, where $%X 
+    x\sim \mathcal{X}$.
+    \item Without loss of generality we select, in turn, each feature $l_i$ in $\mathcal{E}'$ and perform a fixed intervention of $\pm 1$ 
+    to obtain $\hat{l} = \Phi_a(\Phi_d (\Phi_e(z))), z \sim \mathcal{N}(\Phi_f (\Phi_g (l, do(l_i = \pm1))), 0.1)$; we then find, in $\hat{l}$, all other features affected by this intervention and note the change in their value with respect to their original value in $l$.
+    \item Once we establish the change in value for feature $\hat{l_j}$ with respect to $l_j$ as a result of intervention on $l_i$, we perform a controlled intervention on feature $l_j$ with the observed change $\hat{l_j}$ resulting in $\hat{l'} = \Phi_a(\Phi_d (\Phi_e(z))), z \sim \mathcal{N}(\Phi_f (\Phi_g (l, do(l_j = \hat{l_j}))), 0.1)$, and note changes in its descendent feature values with respect to $\hat{l}$.
+    %This will help us eliminate all the spurious edges generated due to higher order interaction.
+    \item We repeat the above two steps until all the features are  covered; if the relative change before and after an intervention is greater than a given threshold in an expectational sense (see  Equation ~\ref{eqn:edgeweightage}), we establish an edge between (nodes corresponding to) those two features ($l_i \rightarrow l_j$). Equation \ref{eqn:explicitedge} describes this process mathematically.
+\end{enumerate}
+
+% \begin{wrapfigure}{r}{0.6\textwidth}
+%     \begin{center}
+%         \includegraphics[width=0.59\textwidth]{imgs/CSM-construction.png}
+%         \caption{Proposed method for interventional graph construction}
+%         \label{fig:graphgen}
+%     \end{center}
+% \end{wrapfigure}
+
+% Figure \ref{fig:graphgen} describes the approach followed for explicit graph generation.
+% and algorithm \ref{alg:graphgen} describes the proposed method algorithmically.
+% Where $\{z_1, z_2, ...z_d\}$ and $\{\hat{z}_1, \hat{z}_2, ... \hat{z}_d \}$ correspond to pre and post interventional alignment vectors respectively.
+% \ft{Note that} \ftcom{, as a result of our definition? because of further definitions - see equation 3?. AK: it's an illustration of above process considering an example of ICP} 
+An edge exists between nodes $l_i$ and $l_j$ only if there is a difference between $l_j$ and $\hat{l}_j$ upon intervention on $l_i$, conditioned on $\textbf{pa}_{l_i}$ (parent features of $l_i$).
+Let us consider an ICP (see Definition~\ref{prp:causalstructure}) example, where $\node{1} \rightarrow \node{2} \rightarrow \node{3}$ and the second step establishes  causal relations $\node{1} \rightarrow \node{2}$ and $\node{1} \rightarrow \node{3}$, with respect to some threshold $T$ and ${v}^1_2, {v}^1_3$ corresponding to new values of $\node{2},\node{3}$, respectively, due to an intervention on $\node{1}$. 
+In the third step, when we perform an intervention on $\node{2}$ by setting its value to ${v}^1_2$, let the observed value of $\node{3}$ be ${v}^2_3$; then, if $|{v}^2_3 - {v}^1_3| < \epsilon$ we establish the correct edge $\node{2} \rightarrow \node{3}$ by removing the spurious edge $\node{1} \rightarrow \node{3}$. 
+% \ftcom{why is this illustration about parents? I do not follows. AK: In step 3 when we perform a controlled intervention it's same as conditioning node_3 with respect to node_2 (or it's parents)}
+In the case of loops, we use the edge-weight described in Equation \ref{eqn:edgeweightage} to determine the prominent causal direction.
+Mathematically the formulation is described in Equation \ref{eqn:explicitedge}, where $\mathbb{I}$ is an indicator function determining the existence of an edge between $l_i$ and $l_j$.
+% \ftcom{is this an observation or a new definition? how does it fit with equation 2?. AK: It's the mathematical form of the above procedure with all 4 steps in one equation} 
+
+% \ftcom[inline]{Various things I am unclear about below: what is $E$? are you defining an edge, in which case you have used $l_i \rightarrow l_j$ so far?(AK: corrected accordingly) what is $\mathbb{I}$? what is $T$? (AK: I is indicator function and T is threshold, I've defined them in above steps) can you combine $\Phi_f$ and $\Phi_g$? (AK: we can combine but we need to define new notation for that) what is an intervention that changes nothing, can you still call it so? (AK: I guess yes, interventions are not output based there's something called 'no effect interventions')}
+
+\begin{equation}
+    l_i \rightarrow l_j \triangleq \mathbb{I} [ \mathbb{E}_{l \sim \mathcal{E}'}(EW (\Phi_a(\Phi_d(\Phi_e(z)))_i, l_j ) | \textbf{pa}_{\vec{z}_i}) \!\!> \!\!T], %\quad 
+    \; \; \; z \!\sim\! \mathcal{N}(\Phi_f (\Phi_g (l, do(l_i \!=\! l_i))), 0.1)
+    \label{eqn:explicitedge}
+\end{equation}
+
+If the features are disentangled, intervening on $l_i$ should not affect $l_j$: we observe a similar effect in our experiments, which we discuss in the later section of the paper \ref{sec:results}.
+% \ftcom{This deleted sentence does not seem to belong here to me - as it has nothing to do with the example. Should it  be moved before the example?  what point is this trying to make? are you using it to define the next equation? I am confused about the flow here}
+
+\textbf{Graph correctness: }
+The generated graph should be consistent and stable; we define correctness measures depending on these two factors: (i) stability captures the variation of a generated graph when the method is applied to different subsets of a dataset, while (ii) consistency captures the variation in the generated graph when the method is applied to the same data multiple times. 
+We use both stability and consistency properties on the known subgraph for a given set of context features to define the graph correctness metrics.
+%\ftcom{Do you really measure stability and consistency? not sure where this is....}
+
+\begin{asu}
+\label{assumption:graph_correctness}
+The correctness of the entire generated graph is proportional to the correctness of the subgraph with observed context features. We quantify the correctness of the subgraph by comparing it against the known ground-truth subgraph, along with stability and consistency properties.
+\end{asu}
+
+\textit{Remark:} As $|\mathcal{E}'_o| < |\mathcal{E}'_u|$ generally, a direct way to validate a generated graph would be via visual inspection, which may prove to be challenging in case of large graphs; in that case, we can use the subgraph of observed features and compare against ground-truth.
+
+% \ftcom{you have already used $N$ and $M$ before with different meanings, confusing - change? }
+We sample $P$ random subsets with repetition from the test dataset and run $Q$ iterations of graph generation on each set.
+The consistent graph generation behaviour in all $Q$ iterations measures the consistency of our method, while similar graph generation behaviour in all $P$ subsets of dataset measures the stability.
+To quantify the correctness, we simply compare the edges in the generated subgraph with the known ground-truth graph and consider the average over all $PQ$ graphs, which can formally be described as: \textit{correctnessIndex} $ \triangleq \frac{1}{PQ} \sum_%M
+P\sum_%N
+Q\frac{\#CorrectEdgesPredicted - \#AdditionalEdges}{\#TotalEdges}$, where $\#CorrectEdgesPredicted, \#AdditionalEdges, \#TotalEdges$ correspond to the total number of correct edges predicted in a subgraph, wrong edges predicted in a subgraph and total number of ground-truth edges, respectively.
+An edge with a wrong direction is considered an additional edge, so the defined metric accounts for both wrong directions and additional edges. 
+% The correctness of a subgraph can be extrapolated to an entire graph considering $\mathcal{E}'_u$ are learned with orthogonal property, as described in \ref{eqn:alignmentloss}.
+
+
+\subsection{Explanations}
+\label{subsec:exp}
+The latent space feature vocabulary is much richer for extracting explanations beyond feature attributions and saliency maps. 
+In contrast to importance scores and attention maps in input space, explanations based on latent features may help us analyse the model perception on input features.
+Based on this, we generate globally-inspired local explanations, using the feature interaction graph (extracted as described in the previous section) as a global form of explanation. 
+% \ft{Indeed, the} 
+This feature interaction graph explains how the classifier perceives the relationships between various semantically meaningful concepts, which can reveal biases and be used to debug the classifier.
+For obtaining local explanations, we follow the LIME \cite{lime} feature attribution method on the aligned latent features while preserving the feature interactions, indicating the significance of all the latent features in classifying an image into a specific class.
+The generator model helps us visualize the effect of significant features and their interactions on a given image by constructing counterfactual samples.
+
+ %TODO: Local explanation
+
+% The notion of implicit SCM as deifined in proposition \ref{prp:scm}, helps us to use Pearl's definition of counterfactuals as proposed in \cite{pearl2009causality}, which assumes the existence of an SCM in the data-generating process.
+% Constructing the global DAG $\mathcal{M}$ makes it possible to generate counterfactual scenarios based on feature interactions in graph.
+% Due to the notion of implicit DAG generated images as a result of latent space perturbation are same as the counterfactual images.
+
+% As both relations and directionality between variables are implicitly learned in our formulation, we claim that:
+
+% \begin{clm}
+% Generated images as a result of latent space perturbation are same as the counterfactual images, given latent space encodes the structural mechanisms and directionality of causal variables.
+% \end{clm}
+
+% \textit{Remark:} Based on \cite{pearl2009causality}, counterfactual generation follow three steps: (i) Abduction, (ii) Action, and (iii) Prediction. 
+% When causal relationships are implicitly learned: we consider obtaining latent representation to be an abduction step, the step deciding and perturbing specific feature in latent space is considered as an action, while generating results using affected $\hat{\mathcal{M}}$ corresponds to prediction step.
+% and optimizing for $W_a$ affects the implicit SEM $\hat{\mathcal{M}}$; which corresponds to an action step, and finally 
+
+
+% We use LIME\cite{ribeiro2016should} like feature attribution method while preserving causal relationships to identify weight for each part in an ROI to make a final decision.%, formally described in equation \ref{eqn:featureattr}.
+% Due to the existence of SCM, our framework can also generate counterfactual explanations, as explored in \cite{lang2021explaining}. 
+
+% \begin{align}
+%     \begin{split}
+%       m_t &= (1 - \gamma)m_{t-1} + \gamma \mathbb{E}_{e,y} [ \nabla_{w_t} (\mathcal{L}(\zeta(e), y))]\\
+%       w^i_t &= 
+%         \begin{cases}
+%             |w^i_{t-1} - 1|,    & \text{if } |m_t^i| > \tau \text{ and }\text{sign}(m_t^i) = \text(sign)(w_{t-1}^i)\\
+%             w^i_{t-1},              & \text{otherwise}
+%         \end{cases}
+%     \end{split}
+%     \label{eqn:featureattr}
+% \end{align}
+
+% To generate counterfactuals we perform intervention on a set of variables present in SCM or latent space and observe downstream changes $\mathcal{P}_{\hat{\mathcal{M}}}(Z, \{do(z_i = z_i), do(z_j = z_j)\})$ in both generated image and classifier's decision.
+We evaluate the local explanations with two measures: stability and faithfulness, as defined next.
+
+\begin{wrapfigure}{r}{0.59\textwidth}
+  \begin{center}
+    \includegraphics[width=0.58\textwidth]{imgs/frameworkdag.png}
+    \caption{The flow of information in various blocks of our proposed framework from classifier features to explanations}
+    \label{fig:framworkdag}
+  \end{center}
+  \vspace{-10pt}
+\end{wrapfigure}
+
+\textbf{Stability: }
+%Our work considers
+We consider explanations to be stable if %the generated explanations 
+they are consistent across multiple iterations for the same image.
+%Here, to 
+To quantify stability, we perturb an image sample with Gaussian noise generating $P$ samples to obtain $Q$ local explanations, one for each sample. 
+We then consider a negative average of the variance in all the local explanations as stability. %\ftcom{what?} across all $PQ$ explanations.
+Formally, $stability(\mathcal{E}xps) \triangleq -\frac{1}{P} \Sigma_P \mathbb{E}_{x \sim \mathcal{E}xps}((x - \mathbb{E}(x))^2)$, where $\mathcal{E}xps$ is set of $Q$ explanations for one of the $P$ samples. 
+The negative sign makes the metric directly proportional to the stability of explanations.
+
+\textbf{Faithfulness: }
+As our method follows the twin-surrogate model, explanations are a function of both data and classifier. 
+We characterize explanations to be faithful if the contribution of %a
+the classifier is higher than the contribution of data.
+We follow an information-theoretical approach to measure the flow of information \cite{o2020generative} to quantify faithfulness. Proposition \ref{prp:faithfulness} provides a quantitative metric.
+
+\begin{dfn}
+\label{dfn:informationflow}
+The \emph{information flow} between two independent sets of nodes $A$ and $B$ \cite{ay2008information} is: 
+% \ftcom{to match the use of $\mathcal{I}$ in the proposition, you need to write here $\mathcal{I}(A; B)$. AK: I(A;B) is mutual information and I(A->B) is information flow, two different measures}
+$$\mathcal{I}(A \rightarrow B) = \int_A \mathcal{P}(a) \int_B \mathcal{P}(b \mid do (a)) \log \frac{\mathcal{P}(b \mid do(a))}{\int_{a'} \mathcal{P}(a') \mathcal{P}(b \mid do(a'))da'}db da$$
+where $do(v)$ represents an intervention that fixes the value of a variable to $v$ irrespectively of its parents and $\mathcal{P}$ is a probability distribution.% \ftdel{ of a respective random variables}.
+\end{dfn}
+
+% \ftcom[inline]{I changed the nodes above to match earlier conventions, should we change $a$ and $b$ too? I am not sure what $\mathcal{P}$ stands for in honesty, or whether we need to explain something about notaiton here. AK: here A and B are not nodes they are set of nodes so reverted back to previous notations}
+
+\begin{prp}
+Based on the above Definition \ref{dfn:informationflow} and with the reference to framework DAG in Figure \ref{fig:framworkdag},
+% \ftcom{Is this result restricted to the simple DAG in the figure? it seems so from what you say, but this is very very restricted... If not, I would say `With reference to Fig...,' and you do not need to mention the definition again, if you use the term information flow in the proposition and the $\mathcal{I}$...} 
+we show that the bounded mutual information between $\mathcal{E}'$ and $\mathcal{E}xps$ is the same as the information flow from the classifier to the generated explanations.
+Due to this, we consider the normalised mutual information as the `faithfulness' metric, given by $\Big( faithfulness index = \frac{\mathcal{I}(\mathcal{E}'; \mathcal{E}xps)}{\sqrt{\mathcal{H}(\mathcal{E}xps)\mathcal{H}(\mathcal{E}')}}\Big)$, where $\mathcal{H}(.)$ corresponds to entropy.
+%\ftdel{and $\mathcal{I}$ corresponds to mutual information}.
+(The proof and reasoning for this proposition are given in appendix \ref{section:appendix})
+\label{prp:faithfulness}
+\end{prp}
+
+% Let us consider the feature attribution based method, explanations $\mathcal{E}xps$ are a part of the classifier's confidence ($\mathcal{E}xps \in \mathcal{Y}$).
+% Probability of generating explanation $\mathcal{E}xp \in \mathcal{E}xps$ can be described by a conditional $\mathcal{P}(\mathcal{E} \mid l), l \in \mathcal{L}$.
+
+% $$\mathbb{I}(\mathcal{L} \rightarrow \mathcal{E}xps) = \int_l \mathcal{P}(l) \int_{\mathcal{E}xp} \mathcal{P}(\mathcal{E}xp \mid do (l)) \log \frac{\mathcal{P}(\mathcal{E}xp \mid do(l))}{\int_{l'} \mathcal{P}(l') \mathcal{P}(\mathcal{E}xp \mid do(l'))dl'}d\mathcal{E}xp dl$$ 
+
+% As integrals are applied over entire space, intervention can be replaced by conditionals which simplifies the above equation as:
+% $$\mathbb{I}(\mathcal{L} \rightarrow \mathcal{E}xps) = \int_l \int_{\mathcal{E}xp} \mathcal{P}(l) \mathcal{P}(\mathcal{E}xp \mid l) \log \frac{\mathcal{P}(\mathcal{E}xp \mid l)}{\int_{l'} \mathcal{P}(l') \mathcal{P}(\mathcal{E}xp \mid l')dl'}d\mathcal{E}xp dl$$ 
+% $$\Rightarrow \int_l \int_{\mathcal{E}xp} \mathcal{P}(l, \mathcal{E}xp) \log \frac{\mathcal{P}(\mathcal{E}xp \mid l)}{\mathcal{P}(\mathcal{E}xp)}d\mathcal{E}xp dl$$ 
+% $$\Rightarrow \int_l \int_{\mathcal{E}xp} \mathcal{P}(l, \mathcal{E}xp) \log \frac{\mathcal{P}(\mathcal{E}xp, l)}{\mathcal{P}(\mathcal{E}xp)\mathcal{P}(l)}d\mathcal{E}xp dl$$ 
+
+% $$\therefore \mathbb{I}(\mathcal{L} \rightarrow \mathcal{E}xps) = \mathbb{I}(\mathcal{L}; \mathcal{E}xps) \propto \frac{\mathbb{I}(\mathcal{L}; \mathcal{E}xps) \cite{strehl2002cluster}}{\sqrt{\mathbb{H}(\mathcal{E}xps)\mathbb{H}(\mathcal{L})}}$$
+
+
+% In the case of a counterfactual method, explanations $\mathcal{E}xps$ are a part of input data ($\mathcal{E}xps \in \mathcal{X}$). 
+% Without loss of generality, we can apply the same metric to quantify the explanation's faithfulness to a classifier. 
+
+% the conditional $\mathcal{P}(\mathcal{E} \mid l), l \in \mathcal{L}$ can be factorized into $\mathcal{P}(\mathcal{E} \mid l) = \int_x \mathcal{P}(\mathcal{E} \mid \hat{x}) \mathcal{P}(\hat{x} \mid l)d\hat{x}$.
+
+\section{Results}
+\label{sec:results}
+We evaluate the performance of our proposed framework for both causal discovery and explanations; we use classifiers trained on two different datasets with observed context features, namely Morpho-MNIST\cite{castro2019morpho} and FFHQ\cite{karras2019style}.
+% \ftcom{I would put again the references here}
+We compare our graph generation technique against two standard methods for causal discovery, Linear Non-Gaussian Acyclic Model (LiNGAM) with latent confounders \cite{maeda2020rcd} and Greedy Equivalence Search (GES) \cite{chickering2002optimal}.
+We compare our explanations against saliency-based methods, LIME \cite{ribeiro2016should}, DeepSHAP \cite{SHAP}, deepLIFT \cite{deeplift}, and gradCAM \cite{selvaraju2017grad}.
+
+%Details about the data-generating process and the experimental setup for Morpho-MNIST are described in section \ref{sec:casestudy1} in the appendix.
+In the case of Morpho-MNIST, we tested our framework on four different synthetically generated datasets by varying causal relationships among features; all four data-generating processes are described in appendix section \ref{sec:casestudy1}.
+Figure \ref{fig:mmnistresults} indicates a qualitative difference between our method and the other standard methods mentioned above. 
+Existing explanations cannot understand the effect of intermediate features or cannot differentiate the effect of multiple features involved in making specific predictions. For example, these methods cannot differentiate between the effect of thickness and intensity or geometric features like ``loops'' in digits 8 and 6.
+The global feature interaction graph generated %in our explanation 
+by our method addresses this issue to an extent, as it captures complex feature interactions among aligned, semantically meaningful features.  
+The feature interaction graph can further be used to investigate the locality of any given image or even used to generate 
+% \ft{feature attribution explanations or even} 
+%AK: As problem above is described in terms of localities I think we need to write it this way
+counterfactual examples. Qualitative results are shown in Figures \ref{fig:mmnistresults} and \ref{fig:ffhqresults}.
+To quantitatively compare explanations, we make use of the \textit{faithfulness index} %described in \ref{subsec:exp} 
+and of the \textit{stability index} described in Section ~\ref{subsec:exp}. 
+We report in Table \ref{table:explanationresults} the average faithfulness and 
+%average
+stability indeces obtained for 1000 generated explanations%, presented in Table \ref{table:explanationresults}
+. 
+
+In the case of the high resolution human faces dataset (FFHQ) \cite{karras2019style}, with an image size of 128x128, we explain the classifier trained to classify gender% based on an image
+.
+For causal discovery, we only consider ten observed features out of forty given attributes in the dataset% for causal discovery
+,
+%We 
+selected based on the frequency of values of these features and their extent of being independent of each other (subjectively selected). 
+A detailed list of selected features along with additional examples are described in appendix \ref{sec:casestudy2}.
+Figure \ref{fig:ffhqresults}(a) describes the generated causal structure on ten observed context features, Figure \ref{fig:ffhqresults}(b) demonstrates a given image as perceived by the classifier along with importance scores for observed context features and %an
+the effect on confidence scores due to an intervention %of 
+on the smile attribute, and Figure \ref{fig:ffhqresults}(c) describes the effect of an intervention on the smile attribute.
+
+
+\begin{figure}
+  \centering
+    \subfloat[Ground-truth \\ sub graph]{\includegraphics[width=.25\textwidth]{imgs/gtigraph.png}} \hfill
+    \subfloat[GES discoveries \\ \textit{correctnessIndex=0.66}]{\includegraphics[width=.25\textwidth]{imgs/ges.png}} \hfill
+    \subfloat[LiNGAM discoveries \\ \textit{correctnessIndex=0.66}]{\includegraphics[width=.25\textwidth]{imgs/lingam.png}} \hfill
+    \subfloat[Proposed \\ \textit{correctnessIndex=1.0}]{\includegraphics[width=.25\textwidth]{imgs/ibg.png}} \hfill
+    \caption{(Quantitative and qualitative) Comparison of causal discovery methods%, figure indicates the quality of causal discoveries both quantitatively and qualitatively
+    .}
+    \label{fig:causaldiscoveries}
+\end{figure}
+
+\begin{figure}
+  \centering
+    \subfloat[]{\includegraphics[width=.32\textwidth]{imgs/mnistExpComp.png}} \hfill
+    \subfloat[]{\includegraphics[width=.30\textwidth]{imgs/mnistgil.png}} \hfill
+    \subfloat[]{\includegraphics[width=.35\textwidth]{imgs/mnistfinteraction.png}} \hfill
+    \caption{
+    Demonstration of the effectiveness of GLANCE explanations on the Morpho-MNIST-IT dataset (the global explanation graph is %described 
+    in Figure ~\ref{fig:causaldiscoveries}(d)). (a) Demonstrates explanations obtained from four standard methods. (b) GLANCE explanations: the first row indicates the original image and the image perceived by the classifier%, while
+    ; the second row indicates aligned features' importance scores and %an 
+    effect on confidence scores with original, perceived, and intervened (w.r.t the thickness attribute) images% (intervened w.r.t thickness attribute)
+    . (c) The first column %demonstrates 
+    shows an intervention on the perceived image and the second column corresponds to %an
+    the effect of an intervention (difference between perceived and intervened images).}
+    \label{fig:mmnistresults}
+\end{figure}
+
+\begin{table}[]
+\caption{Quantitative comparison between multiple explanation methods with respect to faithfulness and stability properties (higher values indicate better performance).}
+\vspace{10pt}
+\centering
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+\begin{tabular}[c]{@{}l@{}}Metrics $\downarrow$ | Methods $\rightarrow$\end{tabular} & LIME & DeepSHAP & DeepLIFT & GradCAM & Ours \\ \midrule
+\begin{tabular}[c]{@{}l@{}} \textit{Faithfullness Index}\end{tabular} &   0.22  &  0.67    &  0.92   &  0.22  &  \textbf{0.97}  \\
+\begin{tabular}[c]{@{}l@{}} \textit{Stability Index}\end{tabular}  &      -1.40 &  -0.07  &  -0.04  & -2.53  &  \textbf{-0.02} \\ \bottomrule
+\end{tabular}
+\label{table:explanationresults}
+\vspace{-10pt}
+\end{table}
+
+\begin{figure}
+  \centering
+    \subfloat[]{\includegraphics[width=.40\textwidth]{imgs/ffhqdag.png}} \hfill
+    \subfloat[]{\includegraphics[width=.28\textwidth]{imgs/ffhqgil.png}} \hfill
+    \subfloat[]{\includegraphics[width=.31\textwidth]{imgs/ffhqinteraction.png}} \hfill
+    \caption{(a) %Demonstrates causal 
+    DAG generated by our proposed method. (b) GLANCE explanations: the first row indicates the original image and the image perceived by the classifier%, while 
+    ; the second row indicates feature importance scores and %an 
+    effect on confidence scores with original, perceived, and intervened ( w.r.t the smile attribute) image% (intervened w.r.t smile attribute)
+    . (c) The first column demonstrates an intervention on the perceived image and the second column corresponds to %an 
+    the effect of an intervention.}
+    \label{fig:ffhqresults}
+    \vspace{-5pt}
+\end{figure}
+
+
+\section{Conclusion}
+We present GLANCE, a novel explanation framework that uses latent space vocabulary to generate %a 
+global explanations in terms of graphs and %generates 
+local explanations in terms of feature importance scores; %the 
+then, a
+generator can be used to visualize the effect of feature importance and interactions.
+We validate both causal discovery and GLANCE explanations both qualitatively and quantitatively against existing standard explanations methods.
+The proposed method for extraction of global %DAG 
+explanations (in the form of DAGs) follows carefully constructed steps using the ideas of intervention, indicating the causal interaction and influence among features in latent space.
+The quantification of faithfulness helps us consider explanations %much 
+more carefully, and this helps us differentiate between explanations obtained from the underlying classifier model and explanations generated from data alone.
+We do not consider assigning semantic meaning to aligned features in this work, which could be a possible direction for future work. 
+ GLANCE, along with assigned semantic meaning to latent features similar to \cite{ghorbani2019towards}, would effectively communicate the decision making parameters in classifiers to humans, thereby increasing the quality of explanations.
+Furthermore, extending the framework to explain other  models beyond classifiers for visual data, such as time series, text, or tabular data, can broaden the impact of our framework.
+
+
+\section*{Acknowledgements}
+This work was supported by UKRI [grant number EP/S023356/1], in the UKRI Centre for Doctoral Training in Safe and Trusted AI.
+\bibliographystyle{unsrt}
+\bibliography{main.bib}
+
+\section{Appendix}
+\label{section:appendix}
+
+\begin{prp}
+Based on the definition \ref{dfn:informationflow}, we show the bounded mutual information (normalized mutual information) can be considered as a 'faithfulness' metric to quantify the classifier's contribution to generating explanations.
+\end{prp}
+
+Let us consider the feature attribution based method, probability of generating explanation $\mathcal{E}xp \in \mathcal{E}xps$ can be formally described by a conditional $\mathcal{P}(\mathcal{E}xp \mid l), l \in \mathcal{E}'$.
+
+$$\mathcal{I}(\mathcal{E}' \rightarrow \mathcal{E}xps) = \int_l \mathcal{P}(l) \int_{\mathcal{E}xp} \mathcal{P}(\mathcal{E}xp \mid do (l)) \log \frac{\mathcal{P}(\mathcal{E}xp \mid do(l))}{\int_{l'} \mathcal{P}(l') \mathcal{P}(\mathcal{E}xp \mid do(l'))dl'}d\mathcal{E}xp dl$$ 
+
+As integrals are applied over entire space, intervention can be replaced by conditionals which simplifies the above equation as:
+$$\mathcal{I}(\mathcal{E}' \rightarrow \mathcal{E}xps) = \int_l \int_{\mathcal{E}xp} \mathcal{P}(l) \mathcal{P}(\mathcal{E}xp \mid l) \log \frac{\mathcal{P}(\mathcal{E}xp \mid l)}{\int_{l'} \mathcal{P}(l') \mathcal{P}(\mathcal{E}xp \mid l')dl'}d\mathcal{E}xp dl$$ 
+$$\Rightarrow \int_l \int_{\mathcal{E}xp} \mathcal{P}(l, \mathcal{E}xp) \log \frac{\mathcal{P}(\mathcal{E}xp \mid l)}{\mathcal{P}(\mathcal{E}xp)}d\mathcal{E}xp dl$$ 
+$$\Rightarrow \int_l \int_{\mathcal{E}xp} \mathcal{P}(l, \mathcal{E}xp) \log \frac{\mathcal{P}(\mathcal{E}xp, l)}{\mathcal{P}(\mathcal{E}xp)\mathcal{P}(l)}d\mathcal{E}xp dl$$ 
+
+$$\therefore \mathbb{I}(\mathcal{E}' \rightarrow \mathcal{E}xps) = \mathcal{I}(\mathcal{E}'; \mathcal{E}xps) \propto \frac{\mathcal{I}(\mathcal{E}'; \mathcal{E}xps) \cite{strehl2002cluster}}{\sqrt{\mathcal{H}(\mathcal{E}xps)\mathcal{H}(\mathcal{E}')}}$$
+
+
+In the case of a counterfactual method, explanations $\mathcal{E}xps$ are a part of input data ($\mathcal{E}xps \in \mathcal{X}$). 
+Without loss of generality, we can apply the same metric to quantify the explanation's faithfulness to a classifier. 
+
+% the conditional $\mathcal{P}(\mathcal{E} \mid l), l \in \mathcal{L}$ can be factorized into $\mathcal{P}(\mathcal{E} \mid l) = \int_x \mathcal{P}(\mathcal{E} \mid \hat{x}) \mathcal{P}(\hat{x} \mid l)d\hat{x}$.
+
+
+\section{Case Study 1: Morpho-MNIST}
+\label{sec:casestudy1}
+% \begin{wrapfigure}{r}{0.3\textwidth}
+%   \begin{center}
+%     \includegraphics[width=0.28\textwidth]{imgs/morphoMNISTCausalDAG.png}
+%     \caption{Causal DAG used to generate synthetic Morpho-MNIST dataset}
+%     \label{fig:morphoMNISTCausalDAG}
+%   \end{center}
+% \end{wrapfigure}
+
+Here, we consider explaining a model trained on synthetic data based on MNIST digits \cite{castro2019morpho}. 
+We define multiple data-generating process with four different variables thickness, width, slant, and intensity, and observe how our proposed method retrieves this causal structure using latent information via controlled interventions.
+In this setup thickness corresponds to the stroke thickness of a digit, width corresponds to the total width of a written digit, slant corresponds to the shear factor along a horizontal direction, and intensity corresponds to the average intensity of pixels in a digit.
+Functions $SetIntensity( · ; i)$, $SetSlant( · ; s)$, $SetWidth( · ; w)$, and $SetThickness( · ; t)$ refer to the operations applied to original MNIST digit to generate new image $x$ with desired properties by controlling image morphology.
+Below we formally define 4 different data-generating senarios, Figure \ref{fig:synthDataExp} pictorially demonstrates causal structure used in data-generating performance and our model performance.
+
+\textbf{Morpho-MNIST-TI}: In this setting we consider two causal variables thickness and intensity, where thickness causes intensity. 
+Mathematically the functional relationship between variables are defined as described in equation \ref{eqn:morphoMNISTTIEqns}.
+
+\begin{equation}
+    \begin{aligned}
+        &t := f_t \triangleq 0.5 + \epsilon_t \quad \epsilon_t \sim \Gamma(10, 5) \\
+        &i := f_i \triangleq 64 + 191*\sigma(2*w + 5) + \epsilon_i \quad \epsilon_i \sim \mathbb{N}(0, 1)\\
+        &x := f_x = SetIntensity(SetThickness(X; t); i)
+    \end{aligned}
+    \label{eqn:morphoMNISTTIEqns}
+    \centering
+\end{equation}
+
+\textbf{Morpho-MNIST-IT}: In this experiment we inverted a directionality from previous setting resulting in intensity to cause thickness, which is mathematically described in equation \ref{eqn:morphoMNISTITEqns}
+
+\begin{equation}
+    \begin{aligned}
+        &i := f_i \triangleq \epsilon_i \quad \epsilon_i \sim \mathbb{U}(60, 255)\\
+        &t := f_t \triangleq 3 + \sigma(i/255) + \epsilon_s \quad \epsilon_s \sim \mathbb{N}(0, 0.5)\\
+        &x := f_x = SetThickness(SetIntensity(X; i); t)
+    \end{aligned}
+    \label{eqn:morphoMNISTITEqns}
+    \centering
+\end{equation}
+
+\textbf{Morpho-MNIST-TS}: In this setup we use thickness and slant as causal attributes, where thickness causes digit slantness, which is formally described in equation \ref{eqn:morphoMNISTTSEqns}
+
+\begin{equation}
+    \begin{aligned}
+        &t := f_t \triangleq \epsilon_t \quad \epsilon_t \sim \Gamma(0, 5) \\
+        &s := f_s \triangleq 10 + 5*\sigma(2*t - 5) + \epsilon_s \quad \epsilon_s \sim \mathbb{N}(0, 0.5)\\
+        &x := f_x = SetSlant(SetThickness(X; t); s)
+    \end{aligned}
+    \label{eqn:morphoMNISTTSEqns}
+    \centering
+\end{equation}
+
+\textbf{Morpho-MNIST-TSWI}: In this setup we increased a complexity by using intensity, thickness, slant, and digit width as a causal attributes, where thickness causes slant, thickness and slant causes width, and width causes intensity.
+This data-generating process is formally described in equation \ref{eqn:morphoMNISTTSWIEqns}
+
+\begin{equation}
+    \begin{aligned}
+        &t := f_t \triangleq \epsilon_t \quad \epsilon_t \sim \Gamma(0, 5) \\
+        &s := f_s \triangleq 10 + 20*t + \epsilon_s \quad \epsilon_s \sim \mathbb{N}(0, 5)\\
+        &w := f_w \triangleq  10 + 15*\sigma(0.5*t) - 0.25*s  + \epsilon_w \quad \epsilon_w \sim \mathcal{N}(0, 1) \\
+        &i := f_i \triangleq 64 + 191*\sigma(w/25) + \epsilon_i \quad \epsilon_i \sim \mathbb{N}(0, 1)\\
+        &x := f_x = SetIntensity(SetWidth(SetSlant(SetThickness(X; t); s); w); i)
+    \end{aligned}
+    \label{eqn:morphoMNISTTSWIEqns}
+    \centering
+\end{equation}
+
+% As previously described in section \ref{subsec:surrogate}, the observed context features used in the data-generating process are always limited. 
+% We use our framework to construct an SCM with eight variables and analyze a subgraph with nodes that align with features in the data-generating process.
+% This allows us to evaluate the correctness of the generated relationships with respect to proposed causal relations; at the same time, this also allows us to add and examine new variables to our data-generating process.
+
+
+% \begin{wrapfigure}{r}{0.5\textwidth}
+%   \begin{center}
+%     \includegraphics[width=0.48\textwidth]{imgs/tswiv2.png}
+%     \caption{Generated graph via interventions in latent-space}
+%     \label{fig:generatedmorphoMNISTCausalDAG}
+%   \end{center}
+% \end{wrapfigure}
+
+
+\begin{figure}
+    \centering
+    \subfloat[]{\includegraphics[width=0.24\textwidth]{imgs/tix.png}}\hfill
+    \subfloat[]{\includegraphics[width=0.24\textwidth]{imgs/itx.png}}\hfill
+    \subfloat[]{\includegraphics[width=0.24\textwidth]{imgs/tsx.png}}\hfill
+    \subfloat[]{\includegraphics[width=0.24\textwidth]{imgs/tswi.png}}\\
+    \caption{Causal discoveries on various different data-generating processes. Top row describes the causal relationships followed in data-generating process, second row shows the discoveries made by our proposed method, third row shows the cluster formed by a feature disentanglement block to describe an alignment effect, fourth row describes the effectiveness of our alignment block in aligning model latent features to observed context features. 
+    In (a) thickness causes intensity and both thickness and intensity causally affects image, the same behaviour can be observed in generated causal graph with graph \textit{correctnessIndex=1.0}.
+    In (b) intensity causes thickness, we selected this example to examine algorithms behaviour in the case of a reversed causal link(w.r.t (a)), and the correct behaviour is observed in the generated graph with \textit{correctnessIndex=1.0}.
+    In (c) thickness causes slant, again the generated graph shows similar behaviour with \textit{correctnessIndex=0.98}.
+    In (d) we tried adding multiple causal variables with higher relationship depth, and our proposed method was able to reconstruct these relationships with \textit{correctnessIndex=0.94}.}
+    \label{fig:synthDataExp}
+\end{figure}
+
+
+
+Figure \ref{fig:synthDataExp} row 2 describes the explicit graph generated as a result of our framework. 
+In all the cases subgraph with nodes $\in \{t, i, w, s, x\}$ matches precisely with the causal structure followed in our data-generating process, with a graph \textit{correctnessIndex} close to 1.0.
+This indicates the existence of implicit mechanisms and causal structures, providing global explanations for a given data-generating process.
+% To further validate the proposed causal discovery method, we constructed multiple synthetic datasets with varying causal relationships in a data-generating process and tried to reconstruct SCMs via latent space encoding. 
+% Figure \ref{fig:synthDataExp} shows the original causal relationships used in the data-generating process and the generated SCM in each of these scenarios. 
+% It can be seen in most of the cases that \textit{correctnessIndex} is close to 1.0, validating the proposed method.
+
+
+\begin{figure}
+  \centering
+    \subfloat[First row shows an original image, second row describes reconstructed images, while third shows the effect of intervention, followed by difference between intervention and perceived images, and feature importance as perceived by classifier.
+    Last row corresponds to feature attribution explanations on extracted features in latent space.]{\includegraphics[width=1.\textwidth]{imgs/test.png}} \hfill
+    \subfloat[Explanations generated using other standard methods: first, second, third, and forth row correspond to LIME, GradCAM, DeepSHAP, and DeepLIFT explanations respectively.] {\includegraphics[width=1.\textwidth]{imgs/comptest.png}} \hfill
+    
+    \caption{Following figure demonstrates the effectiveness of our proposed explanations and other standard existing explanation frameworks}
+    \label{fig:morhpoMNISTresults}
+\end{figure}
+
+
+To explain the importance of each feature for a classifier, we perform a LIME feature attribution while preserving the causal structure.
+We perform a fixed interventional study on all the features by constructing multiple counterfactual images and observing the shift in confidence scores predicted by the classifier with respect to the original image, indicating the effect of features on the given classifier.
+If confidence increases, we claim that a specific feature has a positive effect on a classifier; otherwise, it negatively affects a classifier.
+
+As interventions may not have a monotonic effect, we conduct two specific queries, one positively increasing feature value while the other reducing the feature value.
+Figure \ref{fig:morhpoMNISTresults} shows the generated counterfactual and the classifier probability describing the importance of a specific positively intervened feature.
+Based on the extracted graph, an interventional behaviour of a feature on an image, and each feature's contribution to the final classifier's decision, we get a comprehensive idea of the classifier's reasoning.
+
+\subsection{Comparative study}
+\subsubsection{Graph Generation}
+% Please add the following required packages to your document preamble:
+\begin{table}[]
+\centering
+\begin{tabular}{@{}llll@{}}
+
+\toprule
+\begin{tabular}[c]{@{}l@{}}Datasets $\downarrow$ \textbackslash\\ Methods $\rightarrow$\end{tabular} & \begin{tabular}[c]{@{}l@{}}LinGAM \\ Based \cite{maeda2020rcd}\end{tabular} & \begin{tabular}[c]{@{}l@{}}GES \\ Based \cite{chickering2002optimal}\end{tabular} & Ours \\ \midrule
+Morpho-MNIST (TI)                                                                                &  0.84                                                                                &    0.66                                                                           &  \textbf{1.0}    \\
+Morpho-MNIST (IT)                                                                                &  0.66                                                                              &  0.66                                                                              &    \textbf{1.0}  \\
+Morpho-MNIST (TS)                                                                                & 0.82                                                                               &  0.66                                                                             &    \textbf{0.98}  \\
+Morpho-MNIST (TSWI)                                                                              &  0.58                                                                             & 0.42                                                                              &  \textbf{0.94}    \\ \bottomrule
+\end{tabular}
+\vspace{5pt}
+\caption{Table describes quantitative comparison between causal multiple causal discovery methods on four different versions of Morpho-MNIST dataset as described in \ref{fig:synthDataExp} using graph \textit{correctnessIndex}.}
+\label{table:discoveryresults}
+\end{table}
+
+% \begin{figure}
+%   \centering
+%     \subfloat[Ground-truth sub graph]{\includegraphics[width=.25\textwidth]{imgs/gtigraph.png}} \hfill
+%     \subfloat[GES discoveries]{\includegraphics[width=.25\textwidth]{imgs/ges.png}} \hfill
+%     \subfloat[liNGAM discoveries]{\includegraphics[width=.25\textwidth]{imgs/lingam.png}} \hfill
+%     \subfloat[Proposed]{\includegraphics[width=.25\textwidth]{imgs/ibg.png}} \hfill
+%     \caption{Qualitative comparison of causal discovery methods}
+%     \label{fig:causaldiscoveries}
+% \end{figure}
+
+% Here, we compare our graph generation technique against existing state-of-the-art methods for causal discoveries, namely Linear Non Gaussian additive model (LiNGAM) based causal discoveries \cite{maeda2020rcd} and Greedy Equivalence Search (GES) based causal discoveries \cite{chickering2002optimal}.
+Most of the existing causal discoveries method try to extract relationships between nodes by assuming a particular structure of models. 
+However, in our case, since we have access to an implicit causal model, we consider trained models as an oracle to perform specific interventions.
+As we observe feature behavior against an actual cause rather than a model hypothesis, we have the flexibility to extract feature relations without any explicit assumptions.
+% Figure \ref{fig:causaldiscoveries}, describes the discoveries made by these two methods using latent features obtained from a model trained using Morpho-MNIST data, where intensity causes thickness.
+We use the graph correctness index defined in \ref{subsec:graphs} to quantify the performance difference between all three methods; table \ref{table:discoveryresults} describes the results. 
+
+\subsubsection{Explanation}
+
+% \begin{table}[]
+% \centering
+% \begin{tabular}{@{}llllll@{}}
+
+% \toprule
+% \begin{tabular}[c]{@{}l@{}}Metrics $\downarrow$ \textbackslash\\ Methods $\rightarrow$\end{tabular} & LIME & DeepSHAP & DeepLIFT & GradCAM & Ours \\ \midrule
+% \begin{tabular}[c]{@{}l@{}} <\textit{Faithfullness} \\ \textit{Index}>\end{tabular} &   0.22  &  0.67    &  0.92   &  0.22  &  \textbf{0.97}  \\
+% \begin{tabular}[c]{@{}l@{}} <\textit{Stability} \\ \textit{Index}>\end{tabular}  &      -1.40 &  -0.07  &  -0.04  & -2.53  &  \textbf{-0.02} \\ \bottomrule
+% \end{tabular}
+% \vspace{5pt}
+% \caption{Table describes the quantitative comparison between multiple explanation methods with respect to faithfulness and stability properties.}
+% \label{table:explanationresults}
+% \end{table}
+
+As previously mentioned, In this study we compare our method against standard saliency based explanation methods, we consider LIME \cite{ribeiro2016should}, DeepSHAP \cite{SHAP}, deepLIFT \cite{deeplift}, and gradCAM \cite{selvaraju2017grad} explanation and compare them against our explanations.
+These methods generate an attention map for an input image given the model's prediction confidence on that image.
+These explanations can provide a simple understanding of what the network is looking at in making certain decisions, but they fail to understand complex feature interactions or even fail to capture relations between pixels in input space.
+These explanation methods do not yield a way to quantify the faithfulness of their generated explanations, which raises the question of trust in the explanations themselves.
+Explanations generated using our method can overcome this kind of issue.
+Figure \ref{fig:morhpoMNISTresults}, demonstrates our framework performance on multiple images, while Figure \ref{fig:synthDataExp} shows the behavior of intermediate latent features.
+
+\begin{wrapfigure}{r}{0.4\textwidth}
+  \begin{center}
+    \includegraphics[width=0.39\textwidth]{imgs/ffhq-gt.png}
+    \caption{Assumed true causal structure between attributes and image.}
+    \label{fig:ffhqgraph-gt}
+  \end{center}
+\end{wrapfigure}
+
+\newpage
+\section{Case Study 2: FFHQ}
+\label{sec:casestudy2}
+
+\begin{figure}
+  \centering
+  \includegraphics[width=1\textwidth]{imgs/ffhqtest.png}
+    \caption{First row shows an original image, second row describes reconstructed images, while third shows the effect of intervention, followed by difference between interventional and perceived images, and feature importance as perceived by classifier.
+    Last row corresponds to feature attribution explanations on extracted features in latent space}
+    \label{fig:ffhqexplanations}
+\end{figure}
+
+
+
+For the second case study, we consider the high resolution human faces dataset (FFHQ) \cite{karras2019style}, this dataset consists of approximately 200k images of 128x128 resolution with 40 different binary attributes, and the task is to categorize images based on gender (0 = male; 1=female).
+As the causal structure is unknown, we consider only ten significantly present attributes in the dataset.
+In our experiment, these attributes are subjectively based on their interactions with respect to other attributes.
+We pick features that are seemingly orthogonal to one another because that helps us to assume ground-truth causal structure to follow naive Bayes structure with all the selected features.
+The ten attributes which we used in our experiment include (\emph{sh: straight-hair, wh: wavy-hair, y: young, m: mustache, b: beard, hc: high-cheekbones, hm: heavy-makeup, s: smiling, l: lipstick, o: open-mouth}), and the structure of assumed ground truth DAG is described in Figure \ref{fig:ffhqgraph-gt}.
+
+For causal discovery and explanations, we consider 512 latent features to capture all the information in the data distribution. 
+Obtained explanations from our method for the classifiers trained on this dataset are described in Figure \ref{fig:ffhqexplanations}. 
+Here, we consider 'smile' as an interventional attribute; the higher attention around the mouth region can be easily seen in different images, indicating the effect of smile intervention. 
+In this current work, we faced challenges with generating high quality counterfactuals. In the future, we are planning to extend this work with auxiliary modules to learn and associate causal attributes with generating high quality and meaningful counterfactuals. 
+
+
+
+
+
+\section{Training}
+	
+We trained all our models on a system with GPU: Nvidia Telsa T4 16GB, CPU: Intel(R) Xeon(R) Gold 6230, and RAM of 384GB.
+In case of Morpho-MNIST, images were resized to $32\times32$ and models were trained with batchsize of 32 with learning rate = 1e-3, $\lambda_1 = 10., \lambda_2 = 30., \lambda_3 = 30.0, \& \lambda_4 = 1.0$.
+In case of AFHQ, images were resized to $128\times128$ and models weere trained with batchsize of 8 with learning rate = 2e-4, $\lambda_1 = 10.0, \lambda_2 = 40.0, \lambda_3 = 80.0, \& \lambda_4 = 1.0$.
+
+
+\end{document}

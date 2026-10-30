@@ -1,0 +1,21 @@
+
+\begin{table*}[h!]
+    \centering
+    \caption{Ablation study on each component of LEMMA. Removing either the \textit{mistake augmentation} module or the \textit{fresh \& restart} module results in a dramatic decline in performance.}
+    \label{tab:ablation_all}
+    \resizebox{\textwidth}{!}{%
+    \begin{tabular}{l|cc|ccccc|c}
+        \toprule[0.15em]
+        \textbf{Method} & \textbf{GSM8K} & \textbf{MATH} & \textbf{ASDIV} & \textbf{Mathematics} & \textbf{MAWPS} & \textbf{SVAMP} & \textbf{College-Math} & \textbf{Avg.} \\
+        \midrule
+        LEMMA & \bf 79.2 & \bf 38.3 & \bf 84.2 & \bf 39.2 & \bf 88.8 & \bf 82.6 & \bf 24.7 & \bf 62.4 \\
+        \midrule
+        w/o Error Aug. & 72.8 & 28.8 & 81.0 & 32.0 & 85.1 & 75.6 & 21.7 & 56.7  \\
+        w/o Error Aug. (90k) & 74.3 & 32.1 & 81.2 & 35.8 & 86.5 & 78.5 & 21.8 & 58.6  \\
+        w/o Fresh \& Restart & 75.2 & 34.4 & 82.7 & 37.1 & 87.7 & 79.6 & 22.2 & 59.8  \\
+        w/o Fresh \& Restart (90k) & 75.7 & 34.1 & 82.3 & 37.6 & 87.0 & 80.2 & 22.1 & 59.9  \\
+        w/o Truncation & 69.4 & 22.8 & 77.1 & 29.4 & 85.1 & 75.6 & 18.7 & 54.0 \\
+        \bottomrule[0.15em]
+    \end{tabular}
+    }
+\end{table*}

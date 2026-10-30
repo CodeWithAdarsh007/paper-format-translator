@@ -1,0 +1,15 @@
+
+
+The Triton kernels and corresponding evaluation codebase were borrowed and adapted from TritonBench but the following enhancements were made: 
+
+37 out of the 184 kernels in TritonBench-G~\cite{li2025tritonbenchbenchmarkinglargelanguage} had errors while running on AMD GPUs (such as Shared memory errors, invalid HIP arguments, ModuleNotFound). We fixed these kernel to be AMD GPU compliant.
+
+For several kernels, the original TritonBench repository had missing call functions for which execution accuracy script was effectively comparing empty strings as output. This was corrected by introducing the following:
+\begin{itemize}
+    \item Adding call to the test functions in the kernels missing it.
+    \item Developing tolerance based tensor comparison of output tensors produced by test functions instead of STDOUT string comparisons.
+    \item Ensuring consistent seed for random tensor generations used in producing inputs in unit tests.
+\end{itemize}
+
+For some kernels, unit tests were written inconsistently that produced unexpected outputs. We have fixed these kernels to have consistent unit tests. 
+

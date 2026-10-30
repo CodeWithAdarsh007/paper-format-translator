@@ -1,0 +1,334 @@
+\begin{thebibliography}{66}
+\providecommand{\natexlab}[1]{#1}
+
+\bibitem[{Achiam et~al.(2023)Achiam, Adler, Agarwal, Ahmad, Akkaya, Aleman, Almeida, Altenschmidt, Altman, Anadkat et~al.}]{achiam2023gpt}
+Josh Achiam, Steven Adler, Sandhini Agarwal, Lama Ahmad, Ilge Akkaya, Florencia~Leoni Aleman, Diogo Almeida, Janko Altenschmidt, Sam Altman, Shyamal Anadkat, et~al. 2023.
+\newblock Gpt-4 technical report.
+\newblock \emph{arXiv preprint arXiv:2303.08774}.
+
+\bibitem[{An et~al.(2023)An, Ma, Lin, Zheng, Lou, and Chen}]{an2023learning}
+Shengnan An, Zexiong Ma, Zeqi Lin, Nanning Zheng, Jian-Guang Lou, and Weizhu Chen. 2023.
+\newblock Learning from mistakes makes llm better reasoner.
+\newblock \emph{arXiv preprint arXiv:2310.20689}.
+
+\bibitem[{Cobbe et~al.(2021)Cobbe, Kosaraju, Bavarian, Chen, Jun, Kaiser, Plappert, Tworek, Hilton, Nakano et~al.}]{cobbe2021training}
+Karl Cobbe, Vineet Kosaraju, Mohammad Bavarian, Mark Chen, Heewoo Jun, Lukasz Kaiser, Matthias Plappert, Jerry Tworek, Jacob Hilton, Reiichiro Nakano, et~al. 2021.
+\newblock Training verifiers to solve math word problems.
+\newblock \emph{arXiv preprint arXiv:2110.14168}.
+
+\bibitem[{Davies et~al.(2021)Davies, Veli{\v{c}}kovi{\'c}, Buesing, Blackwell, Zheng, Toma{\v{s}}ev, Tanburn, Battaglia, Blundell, Juh{\'a}sz et~al.}]{davies2021advancing}
+Alex Davies, Petar Veli{\v{c}}kovi{\'c}, Lars Buesing, Sam Blackwell, Daniel Zheng, Nenad Toma{\v{s}}ev, Richard Tanburn, Peter Battaglia, Charles Blundell, Andr{\'a}s Juh{\'a}sz, et~al. 2021.
+\newblock Advancing mathematics by guiding human intuition with ai.
+\newblock \emph{Nature}, 600(7887):70--74.
+
+\bibitem[{Ding et~al.(2024)Ding, Shi, Liang, Li, Zhu, and Zhang}]{ding2024unleashing}
+Yuyang Ding, Xinyu Shi, Xiaobo Liang, Juntao Li, Qiaoming Zhu, and Min Zhang. 2024.
+\newblock Unleashing reasoning capability of llms via scalable question synthesis from scratch.
+\newblock \emph{arXiv preprint arXiv:2410.18693}.
+
+\bibitem[{Du et~al.(2024)Du, Li, Torralba, Tenenbaum, and Mordatch}]{duimproving}
+Yilun Du, Shuang Li, Antonio Torralba, Joshua~B Tenenbaum, and Igor Mordatch. 2024.
+\newblock Improving factuality and reasoning in language models through multiagent debate.
+\newblock In \emph{Forty-first International Conference on Machine Learning}.
+
+\bibitem[{Guan et~al.(2025)Guan, Zhang, Liu, Shang, Sun, Zhu, Yang, and Yang}]{guan2025rstar}
+Xinyu Guan, Li~Lyna Zhang, Yifei Liu, Ning Shang, Youran Sun, Yi~Zhu, Fan Yang, and Mao Yang. 2025.
+\newblock rstar-math: Small llms can master math reasoning with self-evolved deep thinking.
+\newblock \emph{arXiv preprint arXiv:2501.04519}.
+
+\bibitem[{Guo et~al.(2025)Guo, Yang, Zhang, Song, Zhang, Xu, Zhu, Ma, Wang, Bi et~al.}]{guo2025deepseek}
+Daya Guo, Dejian Yang, Haowei Zhang, Junxiao Song, Ruoyu Zhang, Runxin Xu, Qihao Zhu, Shirong Ma, Peiyi Wang, Xiao Bi, et~al. 2025.
+\newblock Deepseek-r1: Incentivizing reasoning capability in llms via reinforcement learning.
+\newblock \emph{arXiv preprint arXiv:2501.12948}.
+
+\bibitem[{Han et~al.(2024)Han, Liang, Shi, He, and Xiao}]{han2024small}
+Haixia Han, Jiaqing Liang, Jie Shi, Qianyu He, and Yanghua Xiao. 2024.
+\newblock Small language model can self-correct.
+\newblock In \emph{Proceedings of the AAAI Conference on Artificial Intelligence}, volume~38, pages 18162--18170.
+
+\bibitem[{Hendrycks et~al.(2021)Hendrycks, Burns, Kadavath, Arora, Basart, Tang, Song, and Steinhardt}]{hendrycksmath2021}
+Dan Hendrycks, Collin Burns, Saurav Kadavath, Akul Arora, Steven Basart, Eric Tang, Dawn Song, and Jacob Steinhardt. 2021.
+\newblock Measuring mathematical problem solving with the math dataset.
+\newblock \emph{NeurIPS}.
+
+\bibitem[{Hoffmann(2018)}]{hoffmann2018stimulating}
+Michael~HG Hoffmann. 2018.
+\newblock Stimulating reflection and self-correcting reasoning through argument mapping: Three approaches.
+\newblock \emph{Topoi}, 37:185--199.
+
+\bibitem[{Huang et~al.(2024)Huang, Liu, Gong, Gou, Shen, Duan, and Chen}]{huang2024key}
+Yiming Huang, Xiao Liu, Yeyun Gong, Zhibin Gou, Yelong Shen, Nan Duan, and Weizhu Chen. 2024.
+\newblock Key-point-driven data synthesis with its enhancement on mathematical reasoning.
+\newblock \emph{arXiv preprint arXiv:2403.02333}.
+
+\bibitem[{Hurst et~al.(2024)Hurst, Lerer, Goucher, Perelman, Ramesh, Clark, Ostrow, Welihinda, Hayes, Radford et~al.}]{hurst2024gpt}
+Aaron Hurst, Adam Lerer, Adam~P Goucher, Adam Perelman, Aditya Ramesh, Aidan Clark, AJ~Ostrow, Akila Welihinda, Alan Hayes, Alec Radford, et~al. 2024.
+\newblock Gpt-4o system card.
+\newblock \emph{arXiv preprint arXiv:2410.21276}.
+
+\bibitem[{Jiang et~al.(2024)Jiang, Shi, Yu, Liu, Zhang, Li, and Kwok}]{jiang2024forward}
+Weisen Jiang, Han Shi, Longhui Yu, Zhengying Liu, Yu~Zhang, Zhenguo Li, and James Kwok. 2024.
+\newblock Forward-backward reasoning in large language models for mathematical verification.
+\newblock In \emph{Findings of the Association for Computational Linguistics ACL 2024}, pages 6647--6661.
+
+\bibitem[{Koncel-Kedziorski et~al.(2016)Koncel-Kedziorski, Roy, Amini, Kushman, and Hajishirzi}]{koncel2016mawps}
+Rik Koncel-Kedziorski, Subhro Roy, Aida Amini, Nate Kushman, and Hannaneh Hajishirzi. 2016.
+\newblock Mawps: A math word problem repository.
+\newblock In \emph{Proceedings of the 2016 conference of the north american chapter of the association for computational linguistics: human language technologies}, pages 1152--1157.
+
+\bibitem[{Kumar et~al.(2024)Kumar, Zhuang, Agarwal, Su, Co-Reyes, Singh, Baumli, Iqbal, Bishop, Roelofs et~al.}]{kumar2024training}
+Aviral Kumar, Vincent Zhuang, Rishabh Agarwal, Yi~Su, John~D Co-Reyes, Avi Singh, Kate Baumli, Shariq Iqbal, Colton Bishop, Rebecca Roelofs, et~al. 2024.
+\newblock Training language models to self-correct via reinforcement learning.
+\newblock \emph{arXiv preprint arXiv:2409.12917}.
+
+\bibitem[{Lee et~al.(2024)Lee, Wattanawong, Kim, Mangalam, Shen, Anumanchipalli, Mahoney, Keutzer, and Gholami}]{lee2024llm2llm}
+Nicholas Lee, Thanakul Wattanawong, Sehoon Kim, Karttikeya Mangalam, Sheng Shen, Gopala Anumanchipalli, Michael Mahoney, Kurt Keutzer, and Amir Gholami. 2024.
+\newblock Llm2llm: Boosting llms with novel iterative data enhancement.
+\newblock In \emph{Findings of the Association for Computational Linguistics ACL 2024}, pages 6498--6526.
+
+\bibitem[{Li et~al.(2024{\natexlab{a}})Li, Wang, Hu, Wei, Zheng, Hu, Zhang, and Peng}]{li2024common}
+Chen Li, Weiqi Wang, Jingcheng Hu, Yixuan Wei, Nanning Zheng, Han Hu, Zheng Zhang, and Houwen Peng. 2024{\natexlab{a}}.
+\newblock Common 7b language models already possess strong math capabilities.
+\newblock \emph{arXiv preprint arXiv:2403.04706}.
+
+\bibitem[{Li et~al.(2024{\natexlab{b}})Li, Dong, Xue, Peng, Wang, and Liu}]{li2024dotamath}
+Chengpeng Li, Guanting Dong, Mingfeng Xue, Ru~Peng, Xiang Wang, and Dayiheng Liu. 2024{\natexlab{b}}.
+\newblock Dotamath: Decomposition of thought with code assistance and self-correction for mathematical reasoning.
+\newblock \emph{CoRR}.
+
+\bibitem[{Li et~al.(2024{\natexlab{c}})Li, Yuan, Yuan, Dong, Lu, Wu, Tan, Wang, and Zhou}]{li2024mugglemath}
+Chengpeng Li, Zheng Yuan, Hongyi Yuan, Guanting Dong, Keming Lu, Jiancan Wu, Chuanqi Tan, Xiang Wang, and Chang Zhou. 2024{\natexlab{c}}.
+\newblock Mugglemath: Assessing the impact of query and response augmentation on math reasoning.
+\newblock In \emph{Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers)}, pages 10230--10258.
+
+\bibitem[{Li et~al.(2023)Li, Chen, Chen, He, and Zhou}]{li2023reflection}
+Ming Li, Lichang Chen, Jiuhai Chen, Shwai He, and Tianyi Zhou. 2023.
+\newblock Reflection-tuning: Recycling data for better instruction-tuning.
+\newblock In \emph{NeurIPS 2023 Workshop on Instruction Tuning and Instruction Following}.
+
+\bibitem[{Li et~al.(2024{\natexlab{d}})Li, Wang, Li, Guo, Zhang, and Feng}]{li-etal-2024-evaluating-mathematical}
+Xiaoyuan Li, Wenjie Wang, Moxin Li, Junrong Guo, Yang Zhang, and Fuli Feng. 2024{\natexlab{d}}.
+\newblock \href {https://doi.org/10.18653/v1/2024.findings-acl.673} {Evaluating mathematical reasoning of large language models: A focus on error identification and correction}.
+\newblock In \emph{Findings of the Association for Computational Linguistics: ACL 2024}, pages 11316--11360, Bangkok, Thailand. Association for Computational Linguistics.
+
+\bibitem[{Li et~al.(2024{\natexlab{e}})Li, Yang, and Ettinger}]{li2024hindsight}
+Yanhong Li, Chenghao Yang, and Allyson Ettinger. 2024{\natexlab{e}}.
+\newblock When hindsight is not 20/20: Testing limits on reflective thinking in large language models.
+\newblock In \emph{Findings of the Association for Computational Linguistics: NAACL 2024}, pages 3741--3753.
+
+\bibitem[{Liang et~al.(2024)Liang, Yu, Yu, Yao, Zhang, Zhang, and Yu}]{liang2024mathchat}
+Zhenwen Liang, Dian Yu, Wenhao Yu, Wenlin Yao, Zhihan Zhang, Xiangliang Zhang, and Dong Yu. 2024.
+\newblock Mathchat: Benchmarking mathematical reasoning and instruction following in multi-turn interactions.
+\newblock \emph{arXiv preprint arXiv:2405.19444}.
+
+\bibitem[{Lightman et~al.(2024)Lightman, Kosaraju, Burda, Edwards, Baker, Lee, Leike, Schulman, Sutskever, and Cobbe}]{lightmanlet}
+Hunter Lightman, Vineet Kosaraju, Yuri Burda, Harrison Edwards, Bowen Baker, Teddy Lee, Jan Leike, John Schulman, Ilya Sutskever, and Karl Cobbe. 2024.
+\newblock Let's verify step by step.
+\newblock In \emph{The Twelfth International Conference on Learning Representations}.
+
+\bibitem[{Liu et~al.(2024)Liu, Zhang, Luo, and Yao}]{liu2024augmenting}
+Haoxiong Liu, Yifan Zhang, Yifan Luo, and Andrew~C Yao. 2024.
+\newblock Augmenting math word problems via iterative question composing.
+\newblock In \emph{ICLR 2024 Workshop on Navigating and Addressing Data Problems for Foundation Models}.
+
+\bibitem[{Lu et~al.(2024{\natexlab{a}})Lu, Zhou, Ren, Wang, Shi, Pan, Zhan, and Li}]{lu-etal-2024-mathgenie}
+Zimu Lu, Aojun Zhou, Houxing Ren, Ke~Wang, Weikang Shi, Junting Pan, Mingjie Zhan, and Hongsheng Li. 2024{\natexlab{a}}.
+\newblock \href {https://doi.org/10.18653/v1/2024.acl-long.151} {{M}ath{G}enie: Generating synthetic data with question back-translation for enhancing mathematical reasoning of {LLM}s}.
+\newblock In \emph{Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers)}, pages 2732--2747, Bangkok, Thailand. Association for Computational Linguistics.
+
+\bibitem[{Lu et~al.(2024{\natexlab{b}})Lu, Zhou, Wang, Ren, Shi, Pan, Zhan, and Li}]{lu2024step}
+Zimu Lu, Aojun Zhou, Ke~Wang, Houxing Ren, Weikang Shi, Junting Pan, Mingjie Zhan, and Hongsheng Li. 2024{\natexlab{b}}.
+\newblock Step-controlled dpo: Leveraging stepwise error for enhanced mathematical reasoning.
+\newblock \emph{CoRR}.
+
+\bibitem[{Luo et~al.(2023)Luo, Sun, Xu, Zhao, Lou, Tao, Geng, Lin, Chen, and Zhang}]{luo2023wizardmath}
+Haipeng Luo, Qingfeng Sun, Can Xu, Pu~Zhao, Jianguang Lou, Chongyang Tao, Xiubo Geng, Qingwei Lin, Shifeng Chen, and Dongmei Zhang. 2023.
+\newblock Wizardmath: Empowering mathematical reasoning for large language models via reinforced evol-instruct.
+\newblock \emph{arXiv preprint arXiv:2308.09583}.
+
+\bibitem[{Magister et~al.(2023)Magister, Mallinson, Adamek, Malmi, and Severyn}]{magister2023teaching}
+Lucie~Charlotte Magister, Jonathan Mallinson, Jakub~Dominik Adamek, Eric Malmi, and Aliaksei Severyn. 2023.
+\newblock Teaching small language models to reason.
+\newblock In \emph{The 61st Annual Meeting Of The Association For Computational Linguistics}.
+
+\bibitem[{Miao et~al.(2020)Miao, Liang, and Su}]{miao-etal-2020-diverse}
+Shen-yun Miao, Chao-Chun Liang, and Keh-Yih Su. 2020.
+\newblock \href {https://doi.org/10.18653/v1/2020.acl-main.92} {A diverse corpus for evaluating and developing {E}nglish math word problem solvers}.
+\newblock In \emph{Proceedings of the 58th Annual Meeting of the Association for Computational Linguistics}, pages 975--984, Online. Association for Computational Linguistics.
+
+\bibitem[{Pan et~al.(2025)Pan, Wu, Jiang, Luo, Cheng, Li, Yang, Lin, Zhao, Qiu et~al.}]{pan2025memory}
+Zhuoshi Pan, Qianhui Wu, Huiqiang Jiang, Xufang Luo, Hao Cheng, Dongsheng Li, Yuqing Yang, Chin-Yew Lin, H~Vicky Zhao, Lili Qiu, et~al. 2025.
+\newblock On memory construction and retrieval for personalized conversational agents.
+\newblock \emph{arXiv preprint arXiv:2502.05589}.
+
+\bibitem[{Pan et~al.(2024)Pan, Wu, Jiang, Xia, Luo, Zhang, Lin, R{\"u}hle, Yang, Lin et~al.}]{pan2024llmlingua}
+Zhuoshi Pan, Qianhui Wu, Huiqiang Jiang, Menglin Xia, Xufang Luo, Jue Zhang, Qingwei Lin, Victor R{\"u}hle, Yuqing Yang, Chin-Yew Lin, et~al. 2024.
+\newblock Llmlingua-2: Data distillation for efficient and faithful task-agnostic prompt compression.
+\newblock In \emph{Findings of the Association for Computational Linguistics ACL 2024}, pages 963--981.
+
+\bibitem[{Patel et~al.(2021)Patel, Bhattamishra, and Goyal}]{patel2021nlp}
+Arkil Patel, Satwik Bhattamishra, and Navin Goyal. 2021.
+\newblock Are nlp models really able to solve simple math word problems?
+\newblock In \emph{Proceedings of the 2021 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies}, pages 2080--2094.
+
+\bibitem[{Qi et~al.(2024)Qi, Ma, Xu, Zhang, Yang, and Yang}]{qi2024mutual}
+Zhenting Qi, Mingyuan Ma, Jiahang Xu, Li~Lyna Zhang, Fan Yang, and Mao Yang. 2024.
+\newblock Mutual reasoning makes smaller llms stronger problem-solvers.
+\newblock \emph{arXiv preprint arXiv:2408.06195}.
+
+\bibitem[{Qin et~al.(2024)Qin, Li, Zou, Liu, Xia, Huang, Ye, Yuan, Liu, Li et~al.}]{qin2024o1}
+Yiwei Qin, Xuefeng Li, Haoyang Zou, Yixiu Liu, Shijie Xia, Zhen Huang, Yixin Ye, Weizhe Yuan, Hector Liu, Yuanzhi Li, et~al. 2024.
+\newblock O1 replication journey: A strategic progress report--part 1.
+\newblock \emph{arXiv preprint arXiv:2410.18982}.
+
+\bibitem[{Renze(2024)}]{renze-2024-effect}
+Matthew Renze. 2024.
+\newblock \href {https://doi.org/10.18653/v1/2024.findings-emnlp.432} {The effect of sampling temperature on problem solving in large language models}.
+\newblock In \emph{Findings of the Association for Computational Linguistics: EMNLP 2024}, pages 7346--7356, Miami, Florida, USA. Association for Computational Linguistics.
+
+\bibitem[{Renze and Guven(2024)}]{renze2024self}
+Matthew Renze and Erhan Guven. 2024.
+\newblock Self-reflection in llm agents: Effects on problem-solving performance.
+\newblock \emph{arXiv preprint arXiv:2405.06682}.
+
+\bibitem[{Shinn et~al.(2024)Shinn, Cassano, Gopinath, Narasimhan, and Yao}]{shinn2024reflexion}
+Noah Shinn, Federico Cassano, Ashwin Gopinath, Karthik Narasimhan, and Shunyu Yao. 2024.
+\newblock Reflexion: Language agents with verbal reinforcement learning.
+\newblock \emph{Advances in Neural Information Processing Systems}, 36.
+
+\bibitem[{Singh et~al.(2024)Singh, Co-Reyes, Agarwal, Anand, Patil, Garcia, Liu, Harrison, Lee, Xu et~al.}]{singhbeyond}
+Avi Singh, John~D Co-Reyes, Rishabh Agarwal, Ankesh Anand, Piyush Patil, Xavier Garcia, Peter~J Liu, James Harrison, Jaehoon Lee, Kelvin Xu, et~al. 2024.
+\newblock Beyond human data: Scaling self-training for problem-solving with language models.
+\newblock \emph{Transactions on Machine Learning Research}.
+
+\bibitem[{Song et~al.(2023)Song, Wang, Cai, Mondal, and Sahoo}]{song2023comprehensive}
+Yisheng Song, Ting Wang, Puyu Cai, Subrota~K Mondal, and Jyoti~Prakash Sahoo. 2023.
+\newblock A comprehensive survey of few-shot learning: Evolution, applications, challenges, and opportunities.
+\newblock \emph{ACM Computing Surveys}, 55(13s):1--40.
+
+\bibitem[{Stacey et~al.(1982)Stacey, Burton, and Mason}]{stacey1982thinking}
+Kaye Stacey, L~Burton, and J~Mason. 1982.
+\newblock \emph{Thinking mathematically}.
+\newblock Addison-Wesley London.
+
+\bibitem[{Tang et~al.(2024)Tang, Zhang, Wang, and Wei}]{tangmathscale}
+Zhengyang Tang, Xingxing Zhang, Benyou Wang, and Furu Wei. 2024.
+\newblock Mathscale: Scaling instruction tuning for mathematical reasoning.
+\newblock In \emph{Forty-first International Conference on Machine Learning}.
+
+\bibitem[{Tong et~al.(2024{\natexlab{a}})Tong, Li, Wang, Wang, Teng, and Shang}]{tong2024can}
+Yongqi Tong, Dawei Li, Sizhe Wang, Yujia Wang, Fei Teng, and Jingbo Shang. 2024{\natexlab{a}}.
+\newblock Can llms learn from previous mistakes? investigating llms’ errors to boost for reasoning.
+\newblock In \emph{Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers)}, pages 3065--3080.
+
+\bibitem[{Tong et~al.(2024{\natexlab{b}})Tong, Wang, Li, Wang, Han, Lin, Huang, Huang, and Shang}]{tong2024optimizing}
+Yongqi Tong, Sizhe Wang, Dawei Li, Yifan Wang, Simeng Han, Zi~Lin, Chengsong Huang, Jiaxin Huang, and Jingbo Shang. 2024{\natexlab{b}}.
+\newblock Optimizing language model's reasoning abilities with weak supervision.
+\newblock \emph{arXiv preprint arXiv:2405.04086}.
+
+\bibitem[{Tong et~al.(2024{\natexlab{c}})Tong, Zhang, Wang, Wu, and He}]{tong2024dartmath}
+Yuxuan Tong, Xiwen Zhang, Rui Wang, Ruidong Wu, and Junxian He. 2024{\natexlab{c}}.
+\newblock \href {https://openreview.net/forum?id=zLU21oQjD5} {{DART}-math: Difficulty-aware rejection tuning for mathematical problem-solving}.
+\newblock In \emph{The Thirty-eighth Annual Conference on Neural Information Processing Systems}.
+
+\bibitem[{Wang et~al.(2024{\natexlab{a}})Wang, Pan, Zhang, Liu, Lin, and Zhao}]{wanginvestalign}
+Huisheng Wang, Zhuoshi Pan, Hangjing Zhang, Mingxiao Liu, Yiqing Lin, and H~Vicky Zhao. 2024{\natexlab{a}}.
+\newblock Investalign: Align llms with investor decision-making under herd behavior.
+\newblock In \emph{Adaptive Foundation Models: Evolving AI for Personalized and Efficient Learning}.
+
+\bibitem[{Wang et~al.(2024{\natexlab{b}})Wang, Bukharin, Delalleau, Egert, Shen, Zeng, Kuchaiev, and Dong}]{wang2024helpsteer2}
+Zhilin Wang, Alexander Bukharin, Olivier Delalleau, Daniel Egert, Gerald Shen, Jiaqi Zeng, Oleksii Kuchaiev, and Yi~Dong. 2024{\natexlab{b}}.
+\newblock Helpsteer2-preference: Complementing ratings with preferences.
+\newblock \emph{arXiv preprint arXiv:2410.01257}.
+
+\bibitem[{Weng et~al.()Weng, Zhu, Xia, Li, He, Liu, Sun, Liu, and Zhao}]{weng2023large}
+Yixuan Weng, Minjun Zhu, Fei Xia, Bin Li, Shizhu He, Shengping Liu, Bin Sun, Kang Liu, and Jun Zhao.
+\newblock Large language models are better reasoners with self-verification.
+\newblock In \emph{The 2023 Conference on Empirical Methods in Natural Language Processing}.
+
+\bibitem[{Weng et~al.(2023)Weng, Zhu, Xia, Li, He, Liu, Sun, Liu, and Zhao}]{weng-etal-2023-large}
+Yixuan Weng, Minjun Zhu, Fei Xia, Bin Li, Shizhu He, Shengping Liu, Bin Sun, Kang Liu, and Jun Zhao. 2023.
+\newblock \href {https://doi.org/10.18653/v1/2023.findings-emnlp.167} {Large language models are better reasoners with self-verification}.
+\newblock In \emph{Findings of the Association for Computational Linguistics: EMNLP 2023}, pages 2550--2575, Singapore. Association for Computational Linguistics.
+
+\bibitem[{Wu et~al.(2024{\natexlab{a}})Wu, Pan, Wang, Chen, Bai, Wang, Fu, Wang, and Xiong}]{wu2024tokenselect}
+Wei Wu, Zhuoshi Pan, Chao Wang, Liyi Chen, Yunchu Bai, Tianfu Wang, Kun Fu, Zheng Wang, and Hui Xiong. 2024{\natexlab{a}}.
+\newblock Tokenselect: Efficient long-context inference and length extrapolation for llms via dynamic token-level kv cache selection.
+\newblock \emph{arXiv preprint arXiv:2411.02886}.
+
+\bibitem[{Wu et~al.(2024{\natexlab{b}})Wu, Zeng, Zhang, Tan, Shen, and Jiang}]{wu2024large}
+Zhenyu Wu, Qingkai Zeng, Zhihan Zhang, Zhaoxuan Tan, Chao Shen, and Meng Jiang. 2024{\natexlab{b}}.
+\newblock Large language models can self-correct with key condition verification.
+\newblock In \emph{Proceedings of the 2024 Conference on Empirical Methods in Natural Language Processing}, pages 12846--12867.
+
+\bibitem[{Xi et~al.(2024{\natexlab{a}})Xi, Chen, Hong, Jin, Zheng, He, Ding, Liu, Guo, Wang et~al.}]{xitraining}
+Zhiheng Xi, Wenxiang Chen, Boyang Hong, Senjie Jin, Rui Zheng, Wei He, Yiwen Ding, Shichun Liu, Xin Guo, Junzhe Wang, et~al. 2024{\natexlab{a}}.
+\newblock Training large language models for reasoning through reverse curriculum reinforcement learning.
+\newblock In \emph{Forty-first International Conference on Machine Learning}.
+
+\bibitem[{Xi et~al.(2024{\natexlab{b}})Xi, Yang, Huang, Tang, Li, Ding, He, Hong, Do, Zhan et~al.}]{xi2024enhancing}
+Zhiheng Xi, Dingwen Yang, Jixuan Huang, Jiafu Tang, Guanyu Li, Yiwen Ding, Wei He, Boyang Hong, Shihan Do, Wenyu Zhan, et~al. 2024{\natexlab{b}}.
+\newblock Enhancing llm reasoning via critique models with test-time and training-time supervision.
+\newblock \emph{arXiv preprint arXiv:2411.16579}.
+
+\bibitem[{Xu et~al.(2024)Xu, Liu, Liu, Hou, Li, Zhang, Wang, Zeng, Du, Wenyi, Tang, and Dong}]{xu-etal-2024-chatglm}
+Yifan Xu, Xiao Liu, Xinghan Liu, Zhenyu Hou, Yueyan Li, Xiaohan Zhang, Zihan Wang, Aohan Zeng, Zhengxiao Du, Zhao Wenyi, Jie Tang, and Yuxiao Dong. 2024.
+\newblock \href {https://doi.org/10.18653/v1/2024.findings-emnlp.569} {{C}hat{GLM}-math: Improving math problem-solving in large language models with a self-critique pipeline}.
+\newblock In \emph{Findings of the Association for Computational Linguistics: EMNLP 2024}, pages 9733--9760, Miami, Florida, USA. Association for Computational Linguistics.
+
+\bibitem[{Yan et~al.(2024)Yan, Jiang, Liu, Cao, Xu, Cai, Shao et~al.}]{yan2024s}
+Yuchen Yan, Jin Jiang, Yang Liu, Yixin Cao, Xin Xu, Xunliang Cai, Jian Shao, et~al. 2024.
+\newblock S3 c-math: Spontaneous step-level self-correction makes large language models better mathematical reasoners.
+\newblock \emph{arXiv preprint arXiv:2409.01524}.
+
+\bibitem[{Yang et~al.(2024)Yang, Zhang, Wang, Xu, Lin, and Sui}]{yang2024confidence}
+Zhe Yang, Yichang Zhang, Yudong Wang, Ziyao Xu, Junyang Lin, and Zhifang Sui. 2024.
+\newblock Confidence vs critique: A decomposition of self-correction capability for llms.
+\newblock \emph{arXiv preprint arXiv:2412.19513}.
+
+\bibitem[{Yu et~al.(2024{\natexlab{a}})Yu, Jiang, Shi, Jincheng, Liu, Zhang, Kwok, Li, Weller, and Liu}]{yumetamath}
+Longhui Yu, Weisen Jiang, Han Shi, YU~Jincheng, Zhengying Liu, Yu~Zhang, James Kwok, Zhenguo Li, Adrian Weller, and Weiyang Liu. 2024{\natexlab{a}}.
+\newblock Metamath: Bootstrap your own mathematical questions for large language models.
+\newblock In \emph{The Twelfth International Conference on Learning Representations}.
+
+\bibitem[{Yu et~al.(2024{\natexlab{b}})Yu, Xu, Weston, and Kulikov}]{yu2distilling}
+Ping Yu, Jing Xu, Jason~E Weston, and Ilia Kulikov. 2024{\natexlab{b}}.
+\newblock Distilling system 2 into system 1.
+\newblock In \emph{The First Workshop on System-2 Reasoning at Scale, NeurIPS}.
+
+\bibitem[{Yuan et~al.(2023)Yuan, Yuan, Li, Dong, Lu, Tan, Zhou, and Zhou}]{yuan2023scaling}
+Zheng Yuan, Hongyi Yuan, Chengpeng Li, Guanting Dong, Keming Lu, Chuanqi Tan, Chang Zhou, and Jingren Zhou. 2023.
+\newblock Scaling relationship on learning mathematical reasoning with large language models.
+\newblock \emph{arXiv preprint arXiv:2308.01825}.
+
+\bibitem[{Yue et~al.(2024{\natexlab{a}})Yue, Qu, Zhang, Fu, Huang, Sun, Su, and Chen}]{yuemammoth}
+Xiang Yue, Xingwei Qu, Ge~Zhang, Yao Fu, Wenhao Huang, Huan Sun, Yu~Su, and Wenhu Chen. 2024{\natexlab{a}}.
+\newblock Mammoth: Building math generalist models through hybrid instruction tuning.
+\newblock In \emph{The Twelfth International Conference on Learning Representations}.
+
+\bibitem[{Yue et~al.(2024{\natexlab{b}})Yue, Zheng, Zhang, and Chen}]{yue2024mammoth2}
+Xiang Yue, Tuney Zheng, Ge~Zhang, and Wenhu Chen. 2024{\natexlab{b}}.
+\newblock Mammoth2: Scaling instructions from the web.
+\newblock \emph{arXiv preprint arXiv:2405.03548}.
+
+\bibitem[{Zelikman et~al.(2022)Zelikman, Wu, Mu, and Goodman}]{zelikman2022star}
+Eric Zelikman, Yuhuai Wu, Jesse Mu, and Noah Goodman. 2022.
+\newblock Star: Bootstrapping reasoning with reasoning.
+\newblock \emph{Advances in Neural Information Processing Systems}, 35:15476--15488.
+
+\bibitem[{Zhang et~al.(2024{\natexlab{a}})Zhang, Khalifa, Logeswaran, Kim, Lee, Lee, and Wang}]{zhang-etal-2024-small}
+Yunxiang Zhang, Muhammad Khalifa, Lajanugen Logeswaran, Jaekyeom Kim, Moontae Lee, Honglak Lee, and Lu~Wang. 2024{\natexlab{a}}.
+\newblock \href {https://doi.org/10.18653/v1/2024.findings-acl.924} {Small language models need strong verifiers to self-correct reasoning}.
+\newblock In \emph{Findings of the Association for Computational Linguistics: ACL 2024}, pages 15637--15653, Bangkok, Thailand. Association for Computational Linguistics.
+
+\bibitem[{Zhang et~al.(2024{\natexlab{b}})Zhang, Ge, Liang, Yu, Yu, Jia, Yu, and Jiang}]{zhang-etal-2024-learn}
+Zhihan Zhang, Tao Ge, Zhenwen Liang, Wenhao Yu, Dian Yu, Mengzhao Jia, Dong Yu, and Meng Jiang. 2024{\natexlab{b}}.
+\newblock \href {https://doi.org/10.18653/v1/2024.emnlp-main.817} {Learn beyond the answer: Training language models with reflection for mathematical reasoning}.
+\newblock In \emph{Proceedings of the 2024 Conference on Empirical Methods in Natural Language Processing}, pages 14720--14738, Miami, Florida, USA. Association for Computational Linguistics.
+
+\bibitem[{Zhou et~al.(2024)Zhou, Zhang, Wang, Chen, Zhao, Sha, Sheng, Wang, and Wen}]{zhou2024jiuzhang3}
+Kun Zhou, Beichen Zhang, Jiapeng Wang, Zhipeng Chen, Wayne~Xin Zhao, Jing Sha, Zhichao Sheng, Shijin Wang, and Ji-Rong Wen. 2024.
+\newblock Jiuzhang3. 0: Efficiently improving mathematical reasoning by training small data synthesis models.
+\newblock \emph{arXiv preprint arXiv:2405.14365}.
+
+\end{thebibliography}

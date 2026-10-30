@@ -1,0 +1,257 @@
+\begin{thebibliography}{10}
+
+\bibitem{doshi2017role}
+Finale Doshi-Velez, Ryan Budish, and Mason Kortz.
+\newblock The role of explanation in algorithmic trust.
+\newblock Technical report, Technical report, Artificial Intelligence and
+  Interpretability Working Group~…, 2017.
+
+\bibitem{kroll2015accountable}
+Joshua~Alexander Kroll.
+\newblock {\em Accountable algorithms}.
+\newblock PhD thesis, Princeton University, 2015.
+
+\bibitem{kim2018interpretability}
+Been Kim, Martin Wattenberg, Justin Gilmer, Carrie Cai, James Wexler, Fernanda
+  Viegas, et~al.
+\newblock Interpretability beyond feature attribution: Quantitative testing
+  with concept activation vectors (tcav).
+\newblock In {\em International conference on machine learning}, pages
+  2668--2677. PMLR, 2018.
+
+\bibitem{narayanaswamy2020scientific}
+Arunachalam Narayanaswamy, Subhashini Venugopalan, Dale~R Webster, Lily Peng,
+  Greg~S Corrado, Paisan Ruamviboonsuk, Pinal Bavishi, Michael Brenner,
+  Philip~C Nelson, and Avinash~V Varadarajan.
+\newblock Scientific discovery by generating counterfactuals using image
+  translation.
+\newblock In {\em International Conference on Medical Image Computing and
+  Computer-Assisted Intervention}, pages 273--283. Springer, 2020.
+
+\bibitem{ribeiro2016should}
+Marco~Tulio Ribeiro, Sameer Singh, and Carlos Guestrin.
+\newblock " why should i trust you?" explaining the predictions of any
+  classifier.
+\newblock In {\em Proceedings of the 22nd ACM SIGKDD international conference
+  on knowledge discovery and data mining}, pages 1135--1144, 2016.
+
+\bibitem{bau2017network}
+David Bau, Bolei Zhou, Aditya Khosla, Aude Oliva, and Antonio Torralba.
+\newblock Network dissection: Quantifying interpretability of deep visual
+  representations.
+\newblock In {\em Proceedings of the IEEE conference on computer vision and
+  pattern recognition}, pages 6541--6549, 2017.
+
+\bibitem{olah2017feature}
+Chris Olah, Alexander Mordvintsev, and Ludwig Schubert.
+\newblock Feature visualization.
+\newblock {\em Distill}, 2017.
+\newblock https://distill.pub/2017/feature-visualization.
+
+\bibitem{olah2020zoom}
+Chris Olah, Nick Cammarata, Ludwig Schubert, Gabriel Goh, Michael Petrov, and
+  Shan Carter.
+\newblock Zoom in: An introduction to circuits.
+\newblock {\em Distill}, 2020.
+\newblock https://distill.pub/2020/circuits/zoom-in.
+
+\bibitem{sauer2021counterfactual}
+Axel Sauer and Andreas Geiger.
+\newblock Counterfactual generative networks.
+\newblock {\em arXiv preprint arXiv:2101.06046}, 2021.
+
+\bibitem{chang2018explaining}
+Chun-Hao Chang, Elliot Creager, Anna Goldenberg, and David Duvenaud.
+\newblock Explaining image classifiers by counterfactual generation.
+\newblock {\em arXiv preprint arXiv:1807.08024}, 2018.
+
+\bibitem{pawlowski2020dscm}
+Nick Pawlowski, Daniel~C. Castro, and Ben Glocker.
+\newblock Deep structural causal models for tractable counterfactual inference.
+\newblock In {\em Advances in Neural Information Processing Systems}, 2020.
+
+\bibitem{lipton2018mythos}
+Zachary~C Lipton.
+\newblock The mythos of model interpretability: In machine learning, the
+  concept of interpretability is both important and slippery.
+\newblock {\em Queue}, 16(3):31--57, 2018.
+
+\bibitem{armstrong1983some}
+Sharon~Lee Armstrong, Lila~R Gleitman, and Henry Gleitman.
+\newblock What some concepts might not be.
+\newblock {\em Cognition}, 13(3):263--308, 1983.
+
+\bibitem{ghorbani2019towards}
+Amirata Ghorbani, James Wexler, James Zou, and Been Kim.
+\newblock Towards automatic concept-based explanations.
+\newblock {\em arXiv preprint arXiv:1902.03129}, 2019.
+
+\bibitem{kori2020abstracting}
+Avinash Kori, Parth Natekar, Ganapathy Krishnamurthi, and Balaji Srinivasan.
+\newblock Abstracting deep neural networks into concept graphs for concept
+  level interpretability.
+\newblock {\em arXiv preprint arXiv:2008.06457}, 2020.
+
+\bibitem{nemirovsky2020countergan}
+Daniel Nemirovsky, Nicolas Thiebaut, Ye~Xu, and Abhishek Gupta.
+\newblock Countergan: Generating realistic counterfactuals with residual
+  generative adversarial nets.
+\newblock {\em arXiv preprint arXiv:2009.05199}, 2020.
+
+\bibitem{lang2021explaining}
+Oran Lang, Yossi Gandelsman, Michal Yarom, Yoav Wald, Gal Elidan, Avinatan
+  Hassidim, William~T Freeman, Phillip Isola, Amir Globerson, Michal Irani,
+  et~al.
+\newblock Explaining in style: Training a gan to explain a classifier in
+  stylespace.
+\newblock {\em arXiv preprint arXiv:2104.13369}, 2021.
+
+\bibitem{o2020generative}
+Matthew O'Shaughnessy, Gregory Canal, Marissa Connor, Mark Davenport, and
+  Christopher Rozell.
+\newblock Generative causal explanations of black-box classifiers.
+\newblock {\em arXiv preprint arXiv:2006.13913}, 2020.
+
+\bibitem{karras2020analyzing}
+Tero Karras, Samuli Laine, Miika Aittala, Janne Hellsten, Jaakko Lehtinen, and
+  Timo Aila.
+\newblock Analyzing and improving the image quality of stylegan.
+\newblock In {\em Proceedings of the IEEE/CVF Conference on Computer Vision and
+  Pattern Recognition}, pages 8110--8119, 2020.
+
+\bibitem{castro2019morpho}
+Daniel~C Castro, Jeremy Tan, Bernhard Kainz, Ender Konukoglu, and Ben Glocker.
+\newblock Morpho-mnist: quantitative assessment and diagnostics for
+  representation learning.
+\newblock {\em Journal of Machine Learning Research}, 20(178):1--29, 2019.
+
+\bibitem{deng2012mnist}
+Li~Deng.
+\newblock The mnist database of handwritten digit images for machine learning
+  research.
+\newblock {\em IEEE Signal Processing Magazine}, 29(6):141--142, 2012.
+
+\bibitem{karras2019style}
+Tero Karras, Samuli Laine, and Timo Aila.
+\newblock A style-based generator architecture for generative adversarial
+  networks.
+\newblock In {\em Proceedings of the IEEE/CVF conference on computer vision and
+  pattern recognition}, pages 4401--4410, 2019.
+
+\bibitem{lime}
+Marco~Tulio Ribeiro, Sameer Singh, and Carlos Guestrin.
+\newblock " why should i trust you?" explaining the predictions of any
+  classifier.
+\newblock In {\em Proceedings of the 22nd ACM SIGKDD international conference
+  on knowledge discovery and data mining}, pages 1135--1144, 2016.
+
+\bibitem{SHAP}
+Scott~M Lundberg and Su-In Lee.
+\newblock A unified approach to interpreting model predictions.
+\newblock In I.~Guyon, U.~V. Luxburg, S.~Bengio, H.~Wallach, R.~Fergus,
+  S.~Vishwanathan, and R.~Garnett, editors, {\em Advances in Neural Information
+  Processing Systems}, volume~30. Curran Associates, Inc., 2017.
+
+\bibitem{goyal2019counterfactual}
+Yash Goyal, Ziyan Wu, Jan Ernst, Dhruv Batra, Devi Parikh, and Stefan Lee.
+\newblock Counterfactual visual explanations.
+\newblock In {\em International Conference on Machine Learning}, pages
+  2376--2384. PMLR, 2019.
+
+\bibitem{denton2019detecting}
+Emily Denton, Ben Hutchinson, Margaret Mitchell, and Timnit Gebru.
+\newblock Detecting bias with generative counterfactual face attribute
+  augmentation.
+\newblock 2019.
+
+\bibitem{dhurandhar2018explanations}
+Amit Dhurandhar, Pin-Yu Chen, Ronny Luss, Chun-Chen Tu, Paishun Ting,
+  Karthikeyan Shanmugam, and Payel Das.
+\newblock Explanations based on the missing: Towards contrastive explanations
+  with pertinent negatives.
+\newblock {\em Advances in neural information processing systems}, 31, 2018.
+
+\bibitem{joshi2019towards}
+Shalmali Joshi, Oluwasanmi Koyejo, Warut Vijitbenjaronk, Been Kim, and Joydeep
+  Ghosh.
+\newblock Towards realistic individual recourse and actionable explanations in
+  black-box decision making systems.
+\newblock {\em arXiv preprint arXiv:1907.09615}, 2019.
+
+\bibitem{razavi2019generating}
+Ali Razavi, Aaron Van~den Oord, and Oriol Vinyals.
+\newblock Generating diverse high-fidelity images with vq-vae-2.
+\newblock {\em Advances in neural information processing systems}, 32, 2019.
+
+\bibitem{higgins2016beta}
+Irina Higgins, Loic Matthey, Arka Pal, Christopher Burgess, Xavier Glorot,
+  Matthew Botvinick, Shakir Mohamed, and Alexander Lerchner.
+\newblock beta-vae: Learning basic visual concepts with a constrained
+  variational framework.
+\newblock 2016.
+
+\bibitem{locatello2019challenging}
+Francesco Locatello, Stefan Bauer, Mario Lucic, Gunnar Raetsch, Sylvain Gelly,
+  Bernhard Sch{\"o}lkopf, and Olivier Bachem.
+\newblock Challenging common assumptions in the unsupervised learning of
+  disentangled representations.
+\newblock In {\em international conference on machine learning}, pages
+  4114--4124. PMLR, 2019.
+
+\bibitem{locatello2020weakly}
+Francesco Locatello, Ben Poole, Gunnar R{\"a}tsch, Bernhard Sch{\"o}lkopf,
+  Olivier Bachem, and Michael Tschannen.
+\newblock Weakly-supervised disentanglement without compromises.
+\newblock In {\em International Conference on Machine Learning}, pages
+  6348--6359. PMLR, 2020.
+
+\bibitem{kingma2019introduction}
+Diederik~P Kingma and Max Welling.
+\newblock An introduction to variational autoencoders.
+\newblock {\em arXiv preprint arXiv:1906.02691}, 2019.
+
+\bibitem{goodfellow2014generative}
+Ian Goodfellow, Jean Pouget-Abadie, Mehdi Mirza, Bing Xu, David Warde-Farley,
+  Sherjil Ozair, Aaron Courville, and Yoshua Bengio.
+\newblock Generative adversarial nets.
+\newblock {\em Advances in neural information processing systems}, 27, 2014.
+
+\bibitem{ay2008information}
+Nihat Ay and Daniel Polani.
+\newblock Information flows in causal networks.
+\newblock {\em Advances in complex systems}, 11(01):17--41, 2008.
+
+\bibitem{maeda2020rcd}
+Takashi~Nicholas Maeda and Shohei Shimizu.
+\newblock Rcd: Repetitive causal discovery of linear non-gaussian acyclic
+  models with latent confounders.
+\newblock In {\em International Conference on Artificial Intelligence and
+  Statistics}, pages 735--745. PMLR, 2020.
+
+\bibitem{chickering2002optimal}
+David~Maxwell Chickering.
+\newblock Optimal structure identification with greedy search.
+\newblock {\em Journal of machine learning research}, 3(Nov):507--554, 2002.
+
+\bibitem{deeplift}
+Avanti Shrikumar, Peyton Greenside, and Anshul Kundaje.
+\newblock Learning important features through propagating activation
+  differences.
+\newblock In {\em International conference on machine learning}, pages
+  3145--3153. PMLR, 2017.
+
+\bibitem{selvaraju2017grad}
+Ramprasaath~R Selvaraju, Michael Cogswell, Abhishek Das, Ramakrishna Vedantam,
+  Devi Parikh, and Dhruv Batra.
+\newblock Grad-cam: Visual explanations from deep networks via gradient-based
+  localization.
+\newblock In {\em Proceedings of the IEEE international conference on computer
+  vision}, pages 618--626, 2017.
+
+\bibitem{strehl2002cluster}
+Alexander Strehl and Joydeep Ghosh.
+\newblock Cluster ensembles---a knowledge reuse framework for combining
+  multiple partitions.
+\newblock {\em Journal of machine learning research}, 3(Dec):583--617, 2002.
+
+\end{thebibliography}

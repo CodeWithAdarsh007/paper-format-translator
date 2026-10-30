@@ -1,0 +1,28 @@
+\begin{table}
+ \caption{Baseline Results}
+  \centering
+  \begin{threeparttable}
+  \begin{tabular}{llll}
+    \toprule
+    Model     & Call Accuracy (\%)     & Exec Accuracy {\%} & Speedup \\
+    \midrule
+    \multicolumn{4}{c}{TritonBench-modified benchmark}                   \\
+    \midrule
+    GPT4.1 & 14.67 / 19.02  &  8.70 / 14.13  & 0.52 / 0.53    \\
+    GPT4o     &  10.87 / 14.13  & 7.07 / 9.24 & 0.51 / 0.53      \\
+    Gemini2.5pro     & 20.65 / 21.74       & 14.13 / 16.85 & 1.33 / 0.96  \\
+    Claude 3.7  & 11.41 / 20.11 & 7.07 / 15.22 & 0.61 / 0.96 \\
+    \midrule
+    \multicolumn{4}{c}{ROCm benchmark (0-shot results only) } \\
+    \midrule
+    GPT 4.1 & 0 & 0 & 0 \\
+    Gemini-2.5 Pro & 40 & 16.66 & 0.91 \\
+    \bottomrule
+  \end{tabular}
+  \label{tab:baselines}
+  \begin{tablenotes}
+  \small
+\item Note:  numbers to the left of ‘/’ indicate 0-shot results and to the right are 1-shot prompting results.
+\end{tablenotes}
+  \end{threeparttable}
+\end{table}

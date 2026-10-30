@@ -1,0 +1,29 @@
+\begin{table}[!h]
+    \centering
+    \small
+    \renewcommand{\arraystretch}{0.9}
+    \caption{Evaluation on reflective math reasoning using \textit{LLaMA3-8B}. ``DART-Math-U.'' denotes DART-MATH-Uniform and ``DART-Math-H.'' denotes DART-MATH-Hard. Best result is highlighted in \textbf{bold}.}
+    \label{tab:reflection}
+    \resizebox{\columnwidth}{!}{%
+        \begin{tabular}{l|ccc|c}
+            \toprule
+            \multirow{2}{*}{\textbf{Method}} & \multicolumn{3}{c|}{\textbf{MathChat-FQA}} & \multirow{2}{*}{\textbf{MathChat-EC}} \\
+            & \textit{1st} & \textit{2nd} & \textit{3rd} & \\
+            \midrule
+            SFT & 63.2 & 37.2 & 28.3 & 66.1 \\
+            RFT & 64.0 & 40.8 & 29.1 & 62.6 \\
+            MetaMath & 80.3 & 49.4 & 40.1 & 66.6 \\
+            GPTAug & 78.8 & 45.6 & 37.9 & 80.0 \\
+            \midrule
+            ISC & 78.4 & 46.8 & 39.3 & 78.5 \\
+            RefAug & 69.3 & 45.0 & 36.5 & 82.7 \\
+            RefAug-90k & 71.7 & 47.0 & 38.6 & 83.8 \\
+            DART-Math-U. & 82.4	& \bf 50.3 & 37.1	& 80.6 \\
+            DART-Math-H. & 81.7 & 46.2 & 35.1 & 79.8 \\
+            \midrule
+            \rowcolor {gray!20} LEMMA & \bf 83.4 & 49.4 & \bf 43.4 & \bf 84.7 \\
+            \bottomrule
+        \end{tabular}
+    }
+\vspace{-5mm}
+\end{table}

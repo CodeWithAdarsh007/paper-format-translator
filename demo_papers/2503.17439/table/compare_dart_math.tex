@@ -1,0 +1,20 @@
+\begin{table}[h!]
+    \small
+    \centering
+    \renewcommand{\arraystretch}{0.9}
+    \caption{Performance comparison between different variants of LEMMA and DART-MATH on LLaMA3-8B. ``DART-Math-H. (90k)'' denotes a $90.7k$ dataset downsampled from DART-MATH-Hard. ``LEMMA-Hard'' denotes integrating LEMMA with DART-MATH.}
+    \label{tab:compare_dart_math}
+    \resizebox{0.95\linewidth}{!}{%
+    \begin{tabular}{l|c|ccc}
+        \toprule
+        Method & Size & GSM8K & MATH & Avg. \\
+        \midrule
+        DART-Math-H. (90k) & 90.7k & 81.7 & 42.6 & 62.1 \\
+        LEMMA & 88.9k & 79.2 & 38.3 & 58.7 \\
+        \midrule
+        DART-Math-H. (585k) & 585.0k & 81.1 & \bf 46.6 & 63.8 \\
+        LEMMA-Hard & 90.7k & \bf 83.1 & 44.8 & \bf 63.9 \\
+        \bottomrule
+    \end{tabular}
+    }
+\end{table}

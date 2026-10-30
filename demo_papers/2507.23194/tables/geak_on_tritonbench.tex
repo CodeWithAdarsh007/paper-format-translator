@@ -1,0 +1,24 @@
+\begin{table}
+ \caption{GEAK on TritonBench-Modified Benchmark }
+  \centering
+  \begin{threeparttable}
+  \begin{tabular}{lllll}
+    \toprule
+    Difficulty level & Correctly generated kernels & Total kernels in dataset & Exec Accuracy (\%) & Average Speedup  \\
+    \midrule
+    1 & 2 / 3 & 3 & 66.67 / 100.0 & 1.24 / 1.16 \\
+    2 & 23 / 22 & 27 & 85.19 / 81.48 & 4.78 / 1.69 \\
+    3 & 39 / 41 & 65 & 60.00 / 63.08 & 1.57 / 3.02 \\
+    4 & 32 / 34 & 84 & 38.10 / 40.48 & 2.24 / 2.86 \\
+    5 & 1 / 1 & 5 & 20.00 / 20.00 & 0.14 / 0.61 \\
+    \midrule
+    overall & 97 / 101 & 184 & 52.72 / 54.89 & 2.42 / 2.59 \\
+    \bottomrule
+  \end{tabular}
+  \label{tab:geak_on_tritonbench}
+  \begin{tablenotes}
+  \small
+\item Note:  numbers to the left of ‘/’ indicate results on MI250 and to the right are results on MI300.
+\end{tablenotes}
+  \end{threeparttable}
+\end{table}

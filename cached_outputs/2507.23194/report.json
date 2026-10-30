@@ -1,0 +1,38 @@
+{
+  "paper_id": "2507.23194",
+  "title": "GEAK: Introducing Triton Kernel AI Agent & Evaluation Benchmarks",
+  "authors": [
+    "Jianghui Wang[1] Vinay Joshi[1] Saptarshi Majumder Xu Chao Bin Ding Ziqiong Liu Pratik Prabhanjan Brahma Dong Li Zicheng Liu Emad Barsoum Advanced Micro Devices, Inc. (AMD)"
+  ],
+  "source": "demo:2507.23194",
+  "formats": [
+    "ieee",
+    "acm",
+    "lncs"
+  ],
+  "extracted_refs": 14,
+  "sections": 34,
+  "figures": 3,
+  "parse_warnings": [],
+  "compile_status": {
+    "ieee": "built",
+    "acm": "built",
+    "lncs": "built"
+  },
+  "pdf_bytes": {
+    "ieee": 311834,
+    "acm": 685623,
+    "lncs": 385095
+  },
+  "pages": {
+    "ieee": 8,
+    "acm": 7,
+    "lncs": 18
+  },
+  "error_count": {
+    "ieee": 1,
+    "acm": 1,
+    "lncs": 2
+  },
+  "elapsed_s": 14.8
+}

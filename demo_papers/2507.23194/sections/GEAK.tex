@@ -1,0 +1,35 @@
+\subsection{Pipeline}
+\label{sec:geak-pipeline}
+
+As shown in Figure \ref{fig:geak-pipeline}, the agentic AI system comprises four core modules: 1) Generator, 2) Reflector, 3) Evaluator, and 4) Optimizer. The Generator produces code based on user query and contextual information. The Evaluator follows a cascaded design: it first performs a functionality test to verify correctness. If the code fails this test, the corresponding error trace is fed back to the Reflector for further analysis. If the code passes, the Evaluator proceeds to assess its performance, including latency and memory efficiency. If the generated code fails to execute correctly, the Reflector analyzes both the code and the resulting error trace to identify potential issues. Finally, the Optimizer takes as input the functionally correct code and formulates strategies to enhance its performance with respect to latency and computational efficiency. 
+To improve the performance of our agent, we employ some composable and configurable techniques as mentioned in below.
+
+\subsection{Modules}
+\paragraph{1- shot prompting}
+
+To enable 1-shot prompting, the most similar Triton code from existing datasets is used in the prompt. The datasets used for 1-shot prompt do not overlap with the benchmark. We observed that 1-shot sample retrieval from datasets is most effective with code similarity rather than instruction similarity. 
+
+\paragraph{Knowledge Injection} 
+
+We enhance the prompt with domain-specific knowledge on writing efficient Triton kernels, including detailed hardware specifications. This incorporation of low-level optimization principles significantly improves the accuracy and quality of LLM-generated code. 
+
+\paragraph{Reflexion}
+
+To enhance the system's self-correcting capabilities, we leverage a Reflexion\cite{shinn2023reflexionlanguageagentsverbal} module that supports introspective debugging and iterative refinement. When an LLM-generated kernel does not pass the functionality test, the resulting error trace is provided as feedback to the reflector for further analysis and correction. The agent is tasked with analyzing the cause of failure and proposing a corresponding solution. We scale the number of iterations to improve kernel generation. 
+
+\paragraph{LLM selection for kernel agent}  
+
+We have explored the use of multiple LLMs like GPT-4.1, O1 and Gemini 2.5 Pro. We observed significant variation in the outputs produced by different models, indicating that the capability of the underlying LLM can substantially influence the results. 
+
+\paragraph{LLM as Optimizer} 
+
+The Optimizer LLM is tasked with identifying potential optimization directions based on previous code generations and their corresponding performance metrics. These historical records, which include the generated code and associated performance results, are sorted in ascending order of performance. This structured presentation helps guide the LLM toward proposing more effective optimization strategies. \cite{yang2024largelanguagemodelsoptimizers}
+
+\paragraph{Debugging trap} 
+
+When LLM’s generated code has bugs, the error trace is provided to the Reflector for correction. However, we've observed that sometimes code can undergo several reflection cycles while still being plagued by the same bug, which is what we refer to as the debugging trap. To prevent the agent from getting stuck in a debugging trap, we impose a limit on the number of debugging attempts per code snippet using a parameter max\_perf\_debug\_num. If the code continues to fail after reaching this threshold, the agent is required to discard the current approach and generate a new strategy along with fresh code. 
+
+\paragraph{Parallel Scaling}  
+
+To ensure reliable kernel generation, we run multiple instances of GEAK multiple times in parallel and independently. To introduce diversity in the generated code, the LLM output is sampled with the parameter temperature set to 1. Our experiments show that such diversity in generation can yield correct and faster kernels otherwise underexplored. Moreover, further experiments indicate that combining sequential and parallel scaling yields additional performance improvements. To obtain unbiased estimates of accuracy, we estimate it using pass@k metric. 
+

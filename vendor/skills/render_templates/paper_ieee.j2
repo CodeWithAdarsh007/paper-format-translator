@@ -1,0 +1,42 @@
+{#- IEEE conference paper (IEEEtran).
+
+    Front matter is declared in the PREAMBLE on purpose (Step C pilot finding): sir_extractor builds
+    a level-0 lead-in section out of any body text before the first \section, and 445/810 source SIRs
+    have no lead-in -- so text leaking from the body would invent a phantom first section and shift
+    every positional paragraph comparison.
+
+    IEEEtran's keyword mechanism is an environment, which cannot go in the preamble ("Missing
+    \begin{document}") and leaks when it stays in the body, so the keywords ride in a \thanks note
+    inside \author: legal IEEEtran, typeset on the first page, and invisible to the paragraph scan.
+-#}
+{% from "_shared.j2" import render_title, authors_ieee, render_section, render_floats,
+        render_references with context %}
+\documentclass[conference]{IEEEtran}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsfonts}
+\usepackage{url}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{tabularx}
+\usepackage{colortbl}
+\usepackage{bm}
+{{ render_title(metadata.title) }}
+{{ authors_ieee(metadata.authors, metadata.keywords) }}
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+{{ metadata.abstract | default("", true) | tex }}
+\end{abstract}
+
+{% for section in sections %}{{ render_section(section, 0) }}{% endfor %}
+
+{{ render_floats(figures, tables) }}
+
+\bibliographystyle{IEEEtran}
+{{ render_references(references) }}
+
+\end{document}

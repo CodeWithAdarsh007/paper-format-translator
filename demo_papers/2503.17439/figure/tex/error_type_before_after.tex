@@ -1,0 +1,28 @@
+\begin{figure*}[!h]
+    \centering
+    \begin{subfigure}[b]{0.24\textwidth}
+        \includegraphics[width=\linewidth]{figure/error_type_before_after_llama_math.pdf}
+    \caption{LLaMA3-MATH}
+    \label{fig:error_type_before_after_llama_math}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.24\textwidth}
+        \includegraphics[width=\linewidth]{figure/error_type_before_after_deepseek_math.pdf}
+    \caption{DeepSeekMath-MATH}
+    \label{fig:error_type_before_after_deepseek_math}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.24\textwidth}
+        \includegraphics[width=\linewidth]{figure/error_type_before_after_llama_gsm8k.pdf}
+    \caption{LLaMA3-GSM8K}
+    \label{fig:error_type_before_after_llama_gsm8k}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.24\textwidth}
+        \includegraphics[width=\linewidth]{figure/error_type_before_after_deepseek_gsm8k.pdf}
+    \caption{DeepSeekMath-GSM8K}
+    \label{fig:error_type_before_after_deepseek_gsm8k}
+    \end{subfigure}
+    \caption{Error type changes after fine-tuning. LEMMA consistently decreases the prevalence of all type of errors, whereas SFT results in an increase of specific type of errors.}
+    \label{fig:error_type_before_after}
+\end{figure*}

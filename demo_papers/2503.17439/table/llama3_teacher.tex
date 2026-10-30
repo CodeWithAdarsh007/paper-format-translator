@@ -1,0 +1,30 @@
+
+\begin{table*}[h!]
+    \small
+    \centering
+    \caption{Performance comparison on GSM8K, MATH, and out-of-distribution datasets uses \textit{LLaMA-3.1-Nemotron-70B} as the teacher model. LEMMA demonstrates robustness to the choice of teacher model.}
+    \label{tab:llama3_teacher}
+    \resizebox{0.95\textwidth}{!}{%
+    \begin{tabular}{l|cc|ccccc|c}
+        \toprule[0.15em]
+        \multirow{2}{*}{\textbf{Model}} & \multicolumn{2}{c|}{\textit{In-Distribution}} & \multicolumn{5}{c|}{\textit{Out-Of-Distribution}} & \multirow{2}{*}{\textbf{Avg.}} \\
+         & \textbf{GSM8K} & \textbf{MATH} & \textbf{ASDIV} & \textbf{Mathematics} & \textbf{MAWPS} & \textbf{SVAMP} & \textbf{College-Math} &  \\ 
+        \midrule
+
+        \multicolumn{9}{c}{{ \textit{ \textbf{LLaMA-3-8B}} }} 
+        \\
+        \midrule
+        GPTAug & 72.1 & 31.8 & 81.2 & 36.5 & 85.9 & 79.7 & 21.2 & 58.3  \\
+        LEMMA (GPT-4o) & 79.2 & 38.3 & 84.2 & 39.2 & 88.8 & 82.6 & 24.7 & 62.4 \\
+        LEMMA (LLaMA3) & 77.3 & 36.4 & 84.1 & 37.9 & 87.7 & 82.7 & 23.1 & 61.3  \\
+        \midrule
+        \multicolumn{9}{@{}c}{{ \textit{ \textbf{DeepSeekMath-7B}} }} 
+        \\
+        \midrule
+        GPTAug & 77.8 & 45.5 & 88.7 & 52.6 & 89.6 & 71.0 & 31.0 & 65.2  \\
+        LEMMA (GPT-4o) & 80.4 & 50.6 & 89.8 & 61.6 & 90.9 & 81.6 & 35.6 & 70.1  \\
+        LEMMA (LLaMA3) & 78.4 & 48.8 & 88.8 & 60.7 & 88.0 & 76.1 & 34.7 & 67.9  \\
+        \bottomrule[0.15em]
+    \end{tabular}%
+    }
+\end{table*}

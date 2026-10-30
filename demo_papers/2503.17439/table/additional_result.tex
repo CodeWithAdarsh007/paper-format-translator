@@ -1,0 +1,44 @@
+
+\begin{table*}[h!]
+    \centering
+    \caption{Additional results on GSM8K, MATH and out-of-distribution datasets using \textit{Mistral-7B-v0.1} and \textit{Qwen2-Math-7B}. $^\dag$: numbers reported in \citet{yan2024s}.}
+    \label{tab:additional_result}
+    \resizebox{\textwidth}{!}{%
+    \begin{tabular}{l|c|cc|ccccc|c}
+        \toprule[0.15em]
+        \multirow{2}{*}{\textbf{Model}} & \multirow{2}{*}{\textbf{\# Samples}} & \multicolumn{2}{c|}{\textit{In-Distribution}} & \multicolumn{5}{c|}{\textit{Out-Of-Distribution}} & \multirow{2}{*}{\textbf{Avg.}} \\
+         & & \textbf{GSM8K} & \textbf{MATH} & \textbf{ASDIV} & \textbf{Mathematics} & \textbf{MAWPS} & \textbf{SVAMP} & \textbf{College-Math} &  \\ 
+        \midrule[0.1em]
+
+        \multicolumn{9}{c}{{ \textit{ Mistral-7B-v0.1 } }} 
+        \\
+        \midrule[0.1em]
+        SFT & 14.97k & 56.4 & 14.1 & 62.2  & 16.6  & 72.6  & 52.6  & 9.2 & 40.5   \\
+        RFT & 86.52k & 55.6 & 12.7 & 65.5 & 16.6 & 73.8 & 57.4 & 9.5 & 41.6 \\
+        MetaMath & 394.99k & 72.6 & 28.1 & 75.9 & 26.6 & 85.0 & 69.4 & 15.4 & 53.3   \\
+        GPTAug & 88.62k & 69.0 & 30.9 & 77.6 & 34.6 & 82.2 & 71.6 & 16.7 & 54.7   \\
+        \midrule
+        ISC & 86.78k & 54.1 & 24.6 & 18.1 & 27.4 & 19.5 & 12.2 & 14.3 & 24.3  \\
+        RefAug & 29.94k & 71.9 & 30.7 & 78.4 & 33.7 & 83.7 & 74.7 & 17.7 & 55.8  \\
+        RefAug-90k & 89.92k & 73.0 & 31.4 & 79.9 & 34.8 & \bf 86.1 & 78.1 & 17.5 & 57.3  \\
+        \midrule
+        \rowcolor {gray!20} LEMMA & 88.90k & \bf 80.8 & \bf 34.5 & \bf 81.1 & \bf 40.3 & 85.8 & \bf 78.9 & \bf 20.1 & \bf 60.2  \\
+        \midrule[0.1em]
+        \multicolumn{9}{@{}c}{{ \textit{ Qwen2-Math-7B } }} 
+        \\
+        \midrule[0.1em]
+        SFT & 14.97k & 78.7 & 50.9 & 88.1 & 50.3 & 92.4 & 78.9 & 37.0 & 68.0 \\
+        RFT & 86.52k & 83.5 & 54.4 & 90.7 & 57.4 & 92.7 & 80.0 & 38.5 & 71.0  \\
+        MetaMath & 394.99k & 84.2 & 51.8 & 90.4 & 60.7 & 92.6 & 81.9 & 34.4 & 70.9 \\
+        GPTAug & 88.62k & 83.8 & 53.6 & 92.3 & 64.9 & \bf 95.2 & \bf 89.5 & 36.6 & 73.7 \\
+        \midrule
+        ISC & 86.78k & 77.1 & 48.9 & 89.4 & 51.9 & 92.1 & 78.3 & 31.6 & 67.0  \\
+        S$^3$C-Math$^\dag$ (w/ MetaMath) & 927k &  84.7 & 51.7 & - & - & - & 87.4 & - & - \\
+        RefAug & 29.94k & 80.1 & 53.5 & 92.0 & 62.7 & 92.9 & 80.5 & 35.1 & 71.0  \\
+        RefAug-90k & 89.92k & 84.1 & 56.4 & 92.4 & 68.7 & 93.2 & 84.3 & 36.2 & 73.6  \\
+        \midrule
+        \rowcolor {gray!20} LEMMA & 88.90k & \bf 87.4 & \bf 62.9 & \bf 93.0 & \bf 74.1 & 94.8 & 88.9 & \bf 39.1 & \bf 77.2 \\
+        \bottomrule[0.15em]
+    \end{tabular}%
+    }
+\end{table*}

@@ -1,0 +1,157 @@
+{#-
+  _shared.j2 — macros shared by every paper template (Session 7).
+
+  Content model: a SIR field's text was already run through sir_extractor.latex_to_text() on the
+  way in, so it is plain text with the LaTeX punctuation left bare (& % # _ $). The renderer
+  re-protects that punctuation OUTSIDE inline math; sir_extractor un-protects it on the way back
+  out, which is what makes the round trip exact. Measured in render/policy_probe.py: 0.9996 of
+  9,567 fields survive, versus 0.9963 if the text is emitted verbatim.
+
+  tables[].latex and equations[].latex are verbatim LaTeX and are NEVER protected.
+-#}
+
+{% macro render_title(title) -%}
+\title{ {{- title | default("Untitled", true) | tex -}} }
+{%- endmacro %}
+
+{% macro authors_ieee(authors, keywords=[]) -%}
+\author{
+{%- for a in authors or [] -%}
+{%- if not loop.first %} \and {% endif -%}
+\IEEEauthorblockN{ {{- a.name | default("Anonymous", true) | tex -}} }
+{%- if a.affiliation %}
+\IEEEauthorblockA{ {{- a.affiliation | tex -}} {%- if a.email %}\\ {{- a.email | tex -}} {% endif %}}
+{%- endif -%}
+{%- endfor -%}
+{%- if keywords %}
+\thanks{Index Terms---{{ keywords | map("tex") | join(", ") -}} }
+{%- endif %}
+}
+{%- endmacro %}
+
+{% macro authors_acm(authors) -%}
+{%- for a in authors or [] -%}
+\author{ {{- a.name | default("Anonymous", true) | tex -}} }
+{%- if a.affiliation %}
+\affiliation{\institution{ {{- a.affiliation | tex -}} }}
+{%- endif -%}
+{%- if a.email %}\email{ {{- a.email | tex -}} }{% endif %}
+{%- endfor -%}
+{%- endmacro %}
+
+{% macro authors_llncs(authors) -%}
+{%- set people = authors or [] -%}
+\author{
+{%- for a in people -%}
+{%- if not loop.first %} \and {% endif -%}
+{{- a.name | default("Anonymous", true) | tex -}} \inst{ {{- loop.index -}} }
+{%- endfor %}
+}
+\institute{
+{%- for a in people -%}
+{%- if not loop.first %} \and {% endif -%}
+\inst{ {{- loop.index -}} } {{- a.affiliation | default("Unspecified", true) | tex -}}
+{%- if a.email %} \email{ {{- a.email | tex -}} }{% endif %}
+{%- endfor %}
+}
+{%- endmacro %}
+
+{% macro render_block(block) -%}
+{%- set t = block.get("type") -%}
+{%- if t == "paragraph" -%}
+{{ block.get("text", "") | tex }}
+
+{%- elif t == "equation" -%}
+{%- set body = block.get("latex") or "" -%}
+{%- if body | trim %}
+{%- if block.get("label") and ("\\label{" ~ block["label"]) not in body %}
+{% set body = insert_label(body, block["label"]) %}
+{%- endif %}
+{{ body }}
+
+{%- endif -%}
+{%- elif t in ("itemize", "enumerate") -%}
+\begin{ {{- t -}} }
+{%- for it in block.get("items") or [] %}
+\item {{ it | tex }}
+{%- endfor %}
+\end{ {{- t -}} }
+
+{%- elif t == "figure_ref" -%}
+\ref{ {{- block.get("label") | citekey -}} }
+{%- elif t == "table_ref" -%}
+\ref{ {{- block.get("label") | citekey -}} }
+{%- elif t == "citation" -%}
+\cite{
+{%- for k in block.get("keys") or [] -%}
+{%- if not loop.first %},{% endif -%}
+{{- k | citekey -}}
+{%- endfor -%}
+}
+{%- endif -%}
+{%- endmacro %}
+
+{% macro render_section(section, depth=0) -%}
+{%- set level = section.get("level", 1) -%}
+{%- set heading = section.get("heading") -%}
+{%- if heading is not none and heading | trim -%}
+{%- if level == 1 %}\section{ {{- heading | tex -}} }
+{%- elif level == 2 %}\subsection{ {{- heading | tex -}} }
+{%- elif level == 3 %}\subsubsection{ {{- heading | tex -}} }
+{%- else %}\paragraph{ {{- heading | tex -}} }
+{%- endif %}
+
+{%- elif level >= 1 %}\section{}
+
+{%- endif -%}
+{%- for b in section.get("blocks") or [] %}
+{{ render_block(b) }}
+{%- endfor -%}
+{%- endmacro %}
+
+{% macro render_figure(fig) -%}
+\begin{figure}[ {{- fig.get("placement") | default("t", true) | citekey -}} ]
+\centering
+{%- if fig.get("path") %}
+\includegraphics[width=\linewidth]{ {{- fig["path"] | graphpath -}} }
+{%- endif %}
+\caption{ {{- fig.get("caption") | default("", true) | tex -}}
+{%- if fig.get("label") %} \label{ {{- fig["label"] | citekey -}} }{% endif %} }
+\end{figure}
+
+{%- endmacro %}
+
+{% macro render_table(tab) -%}
+\begin{table}[t]
+\centering
+\caption{ {{- tab.get("caption") | default("", true) | tex -}}
+{%- if tab.get("label") %} \label{ {{- tab["label"] | citekey -}} }{% endif %} }
+{{ tab.get("latex") or "" }}
+\end{table}
+
+{%- endmacro %}
+
+{% macro render_equation(eq) -%}
+{%- set body = eq.get("latex") or "" -%}
+{%- if eq.get("label") and ("\\label{" ~ eq["label"]) not in body %}
+{% set body = insert_label(body, eq["label"]) %}
+{%- endif -%}
+{{ body }}
+{%- endmacro %}
+
+{% macro render_references(refs) -%}
+\begin{thebibliography}{99}
+{%- for r in refs or [] %}
+\bibitem{ {{- r.get("key") | citekey -}} } {{ r.get("raw") | default("", true) | tex }}
+{%- endfor %}
+\end{thebibliography}
+{%- endmacro %}
+
+{% macro render_floats(figures, tables) -%}
+{%- for f in figures or [] %}
+{{ render_figure(f) }}
+{%- endfor -%}
+{%- for t in tables or [] %}
+{{ render_table(t) }}
+{%- endfor -%}
+{%- endmacro %}

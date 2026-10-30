@@ -1,0 +1,23 @@
+
+\begin{table}[h!]
+    \small
+    \centering
+    \renewcommand{\arraystretch}{0.9}
+    \caption{Ablation study on each component of LEMMA.}
+    \label{tab:ablation}
+    \resizebox{0.95\linewidth}{!}{%
+    \begin{tabular}{l|cc}
+        \toprule
+        Method & GSM8K & MATH  \\
+        \midrule
+        LEMMA & \bf 79.2 & \bf 38.3 \\
+        % \midrule        
+        w/o Error Aug. & 72.8 & 28.8 \\
+        w/o Error Aug. (90k) & 74.3 & 32.1 \\
+        w/o Fresh \& Restart & 75.2 & 34.4  \\
+        w/o Fresh \& Restart (90k) & 75.7 & 34.1 \\
+        w/o Truncation & 69.4 & 22.8 \\
+        \bottomrule
+    \end{tabular}
+    }
+\end{table}

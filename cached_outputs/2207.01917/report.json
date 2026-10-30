@@ -1,0 +1,38 @@
+{
+  "paper_id": "2207.01917",
+  "title": "GLANCE: Global to Local Architecture-Neutral Concept-based Explanations",
+  "authors": [
+    "Avinash Kori Department of Computing Imperial College London Ben Glocker Department of Computing Imperial College London Francesca Toni Department of Computing Imperial College London"
+  ],
+  "source": "demo:2207.01917",
+  "formats": [
+    "ieee",
+    "acm",
+    "lncs"
+  ],
+  "extracted_refs": 40,
+  "sections": 17,
+  "figures": 9,
+  "parse_warnings": [],
+  "compile_status": {
+    "ieee": "built",
+    "acm": "built",
+    "lncs": "built"
+  },
+  "pdf_bytes": {
+    "ieee": 3592529,
+    "acm": 2565059,
+    "lncs": 3654503
+  },
+  "pages": {
+    "ieee": 11,
+    "acm": 10,
+    "lncs": 24
+  },
+  "error_count": {
+    "ieee": 386,
+    "acm": 383,
+    "lncs": 387
+  },
+  "elapsed_s": 33.1
+}

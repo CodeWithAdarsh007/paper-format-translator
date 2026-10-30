@@ -1,0 +1,68 @@
+
+
+The following kernels have been written by Triton expert engineers and released publicly to help enable the ecosystem around running AI workloads efficiently on AMD GPUs. We also took assistance from frontier LLMs to refactor these, as well as their corresponding unit tests, in the same format as the TritonBench-revised benchmark. This enables us to compare the accuracy and efficiency of our agent in a consistent manner.
+
+\begin{table}
+ \caption{List of kernels and their sources in the RoCM repositories Triton benchmark}
+  \centering
+  \begin{tabular}{ll}
+    \toprule
+    \cmidrule(r){1-2}
+    ROCm Kernel     & Repository link  \\
+    \midrule
+    1. test\_tma\_store\_gemm & \multirow{10}{*}{ROCm/triton }\\
+    2. moe-gemm    &\\
+    3. layernorm   &\\
+    4. triton\_multreduce\_matmul\_kernel.py &\\
+    5. multreduce\_matmul\_dot\_kernel.py    &\\
+    6. gemm       &\\
+    7. test\_block\_pointer\_matmul  &\\
+    8. test\_block\_copy     &\\
+    9. test\_add\_kernel   & \\
+    10. softmax &\\
+    \midrule
+    1. rmsnorm\_fwd   &  \multirow{5}{*}{ROCm/aiter}\\
+    2. rmsnorm\_bwd   & \\
+    3. test\_chained\_dot\_fp8 &\\
+    4. test\_matmul\_MXFP & \\
+    5. test\_gemm\_fusion & \\
+    \midrule
+    1. test\_triton\_swizzle2d  &  \multirow{4}{*}{ROCm/aotriton}\\
+    2. test\_triton\_sort &\\
+    3. test\_triton\_flip &\\
+    4. test\_reverse\_range &\\
+    \midrule
+    1. test\_load\_reduce.py & \multirow{2}{*}{ROCm/vllm} \\
+    2. test\_chained\_matmul &\\
+    \midrule
+    1. test\_random\_int & \multirow{5}{*}{ROCm/pytorch}\\
+    2. test\_randn    & \\
+    3. test\_kernel\_sub &\\
+    4. test\_kernel\_dot &\\
+    5. test\_batched\_vecmat &\\
+    \bottomrule
+    1.test\_flashattention\_fwd & \multirow{2}{*}{ROCm/xformers}\\
+    2.test\_iv\_dependent\_matmul &\\
+    \midrule
+    1.test\_gemm\_no\_scf & ROCm/bitsandbytes \\
+    \midrule
+    1.test\_cast\_matmul &ROCm/TransformerEngine \\
+    \bottomrule
+  \end{tabular}
+  \label{tab:table}
+\end{table}
+
+\subsection{Evaluation Metrics}
+We use the same metrics as reported in TritonBench \cite{li2025tritonbenchbenchmarkinglargelanguage}: 
+
+\begin{itemize}
+    \item \textbf{Call Accuracy:} Fraction of AI-generated kernels that can compile and run without any errors. 
+    \item \textbf{Execution Accuracy:} Percentage of AI-generated kernels that satisfy all unit tests.
+
+    Execution accuracy is computed for kernels that successfully compile.
+    
+    \item \textbf{Speedup:} Relative execution time improvement of AI-generated kernels over reference ground truth kernels. We define it as: expectation of the ratio of median reference kernel latency and generated kernel latency over all unit tests.
+
+    Speedup is only computed for kernels that satisfy all unit tests.
+
+\end{itemize}

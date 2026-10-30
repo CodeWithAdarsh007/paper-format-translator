@@ -1,0 +1,38 @@
+{#- ACM sigconf (acmart).
+
+    Authors/\affiliation/\email are declared in the preamble: acmart accepts that (probed: compiles,
+    193 kB PDF) and it keeps their text out of the body, where the extractor would otherwise read it
+    as a phantom lead-in section. \title, \begin{abstract} and \keywords stay before \maketitle, which
+    is acmart's hard ordering rule; all three are already invisible to the paragraph scan.
+-#}
+{% from "_shared.j2" import render_title, authors_acm, render_section, render_floats,
+        render_references with context %}
+\documentclass[sigconf]{acmart}
+{#- acmart already loads graphicx, amsmath, amssymb and xcolor, so only the table packages it does
+    not provide are added here. -#}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{tabularx}
+\usepackage{colortbl}
+\usepackage{bm}
+{{ authors_acm(metadata.authors) }}
+\begin{document}
+
+{{ render_title(metadata.title) }}
+
+\begin{abstract}
+{{ metadata.abstract | default("", true) | tex }}
+\end{abstract}
+
+{% if metadata.keywords %}\keywords{ {{- metadata.keywords | map("tex") | join(", ") -}} }
+{% endif %}
+\maketitle
+
+{% for section in sections %}{{ render_section(section, 0) }}{% endfor %}
+
+{{ render_floats(figures, tables) }}
+
+\bibliographystyle{ACM-Reference-Format}
+{{ render_references(references) }}
+
+\end{document}

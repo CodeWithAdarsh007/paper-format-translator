@@ -1,0 +1,45 @@
+
+\begin{table*}[h!]
+    \centering
+    \caption{Performance comparison on GSM8K, MATH and out-of-distribution datasets under Pass@1 and Majority@32 (Maj@32) settings. $^\dag$: numbers reported in \citet{yan2024s}. The best result is highlighted in \textbf{bold}. For Maj@32 evaluation, temperature is 0.7.}
+    \label{tab:maj_vote}
+    \resizebox{\textwidth}{!}{%
+    \begin{tabular}{l|c|cc|cc|cc|cc|cc}
+        \toprule[0.15em]
+        \multirow{2}{*}{\textbf{Model}} & \multirow{2}{*}{\textbf{\# Samples}} & \multicolumn{2}{c|}{GSM8K} & \multicolumn{2}{c|}{MATH} & \multicolumn{2}{c|}{ASDIV} & \multicolumn{2}{c|}{Mathematics} & \multicolumn{2}{c}{College-Math} \\
+         & & \textit{Pass@1} & \textit{Maj@32} & \textit{Pass@1} & \textit{Maj@32} & \textit{Pass@1} & \textit{Maj@32} & \textit{Pass@1} & \textit{Maj@32} & \textit{Pass@1} & \textit{Maj@32} \\ 
+        \midrule
+
+        \multicolumn{12}{c}{{ \textit{ \textbf{LLaMA3-8B }} }} 
+        \\
+        \midrule
+        SFT & 14.97k & 65.5 & 80.3 & 19.3 & 30.8 & 72.1 & 82.3 & 23.5 & 35.0 & 13.3 & 20.2  \\
+        RFT & 86.52k & 67.3 & 79.3 & 21.1 & 29.4 & 74.8 & 84.5 & 24.9 & 37.2 & 16.7 & 22.3  \\
+        MetaMath & 394.99k & 79.2 & 85.7 & 34.1 & 42.2 & 81.9 & 87.9 & 35.3 & 47.3 & 20.5 & 25.1  \\
+        GPTAug & 88.62k & 72.1 & 81.1 & 31.8 & 38.8 & 81.2 & \bf 90.4 & 36.5 & 47.5 & 21.2 & 25.0  \\
+        \midrule
+        ISC & 86.78k & 70.8 & 85.5 & 33.4 & 48.4 & 81.1 & 87.4 & 31.8 & 47.8 & 20.2 & 27.4  \\
+        S$^3$C-Math$^\dag$ (w/ MetaMath) & 927k & \bf 82.9 & 87.3 & 33.1 & 41.6 & - & - & - & - & - & - \\
+        RefAug & 29.94k & 75.9 & 83.5 & 32.6 & 42.7 & 82.3 & 90.0 & 35.5 & 46.6 & 21.0 & 25.8  \\
+        RefAug-90k & 89.92k & 77.4  & 85.3  & 34.2  & 41.8  & 82.1  & 90.3  & 35.7  & 49.3  & 21.9  & 25.6  \\
+        \midrule
+        \rowcolor {gray!20} LEMMA & 88.90k & 79.2 & \bf 90.3 & \bf 38.3 & \bf 53.1 & \bf 84.2 & 90.1 & \bf 39.2 & \bf 53.3 & \bf 24.7 & \bf 32.1  \\
+        \midrule
+        \multicolumn{12}{c}{{ \textit{ \textbf{DeepSeekMath-7B}} }} 
+        \\
+        \midrule
+        SFT & 14.97k & 68.1 & 81.7 & 35.2 & 48.6 & 80.9 & 90.0 & 39.6 & 55.1 & 28.8 & 32.6  \\
+        RFT & 86.52k & 73.3 & 84.5  & 39.3  & 50.7  & 85.2  & 91.6  & 46.2  & 62.9  & 31.7 & \bf 38.4 \\
+        MetaMath & 394.99k & 79.4 & 84.8 & 42.0 & 52.5 & 87.8 & 93.1 & 49.0 & 64.2 & 31.6 & 37.4 \\
+        GPTAug & 88.62k & 77.8 & 87.2 & 45.5 & 55.2 & 88.7 & 93.7 & 52.6 & 75.6 & 31.0 & 35.1  \\
+        \midrule
+        ISC & 86.78k & 66.3  & 82.5  & 36.8  & 51.4  & 82.2  & 91.4  & 43.1  & 61.6  & 32.0  & 38.1 \\
+        S$^3$C-Math$^\dag$ (w/ MetaMath) & 927k & \bf 82.5  & 88.2  & 41.4  & 52.1 & - & - & - & - & - & -  \\
+        RefAug & 29.94k & 75.5  & 86.5 & 39.5  & 49.5 & 81.2  & 94.1 & 56.9  & 70.1  & 30.4  & 31.4 \\
+        RefAug-90k & 89.92k & 76.7  & 86.7  & 42.5  & 50.6  & 82.4  & \bf 94.3  & 57.5  & 73.1 & 30.6  & 31.9  \\
+        \midrule
+        \rowcolor {gray!20} LEMMA & 88.90k & 80.4  & \bf 89.2  & \bf 50.6  & \bf 63.6  & \bf 89.8  & 93.1  & \bf 61.6  & \bf 77.4  & \bf 35.6  & 36.8  \\
+        \bottomrule[0.15em]
+    \end{tabular}%
+    }
+\end{table*}

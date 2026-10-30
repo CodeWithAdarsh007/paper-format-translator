@@ -1,0 +1,38 @@
+{
+  "paper_id": "2503.17439",
+  "title": "LEMMA: Learning from Errors for MatheMatical Advancement in LLMs",
+  "authors": [
+    "Zhuoshi Pan , Yu Li , Honglin Lin , Qizhi Pei , Zinan Tang , Wei Wu , Chenlin Ming , H. Vicky Zhao , Conghui He , Lijun Wu [2mm] Tsinghua University, Shanghai AI Laboratory, Renmin University of China, University of Science and Technology of China, Shanghai Jiao Tong University [2mm]"
+  ],
+  "source": "demo:2503.17439",
+  "formats": [
+    "ieee",
+    "acm",
+    "lncs"
+  ],
+  "extracted_refs": 66,
+  "sections": 44,
+  "figures": 15,
+  "parse_warnings": [],
+  "compile_status": {
+    "ieee": "built",
+    "acm": "built",
+    "lncs": "built"
+  },
+  "pdf_bytes": {
+    "ieee": 280253,
+    "acm": 703946,
+    "lncs": 365792
+  },
+  "pages": {
+    "ieee": 13,
+    "acm": 13,
+    "lncs": 32
+  },
+  "error_count": {
+    "ieee": 157,
+    "acm": 86,
+    "lncs": 177
+  },
+  "elapsed_s": 25.5
+}

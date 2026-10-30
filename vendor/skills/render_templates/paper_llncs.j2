@@ -1,0 +1,41 @@
+{#- Springer LNCS (llncs).
+
+    \title/\author/\institute go in the preamble -- probed to compile (60 kB PDF) and, unlike body
+    placement, \institute{...} text then cannot become a phantom lead-in section (that leak alone took
+    lncs from 1.0 to 0.17 on two of five pilot papers). \keywords is a macro rather than an
+    environment, so it is already invisible to the paragraph scan and stays in the body, where llncs
+    expects it after the abstract.
+-#}
+{% from "_shared.j2" import render_title, authors_llncs, render_section, render_floats,
+        render_references with context %}
+\documentclass{llncs}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsfonts}
+\usepackage{url}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{tabularx}
+\usepackage{colortbl}
+\usepackage{bm}
+{{ render_title(metadata.title) }}
+{{ authors_llncs(metadata.authors) }}
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+{{ metadata.abstract | default("", true) | tex }}
+\end{abstract}
+
+{% if metadata.keywords %}\keywords{ {{- metadata.keywords | map("tex") | join(", ") -}} }
+{% endif %}
+{% for section in sections %}{{ render_section(section, 0) }}{% endfor %}
+
+{{ render_floats(figures, tables) }}
+
+\bibliographystyle{splncs04}
+{{ render_references(references) }}
+
+\end{document}

@@ -1,0 +1,19 @@
+\begin{table}[h!]
+    \small
+    \centering
+    \renewcommand{\arraystretch}{0.95}
+    \caption{Performance comparison with additional baselines on GSM8K, MATH using LLaMA3-8B.}
+    \label{tab:additional_baseline}
+    \resizebox{0.95\linewidth}{!}{%
+    \begin{tabular}{l|ccc}
+        \toprule
+        Method & GSM8K & MATH & Avg. \\
+        \midrule
+        LEMA~\cite{an2023learning} & 75.1 & 32.8 & 53.9 \\
+        Mistake tuning~\cite{tong2024can} & 68.9 & 25.5 & 47.2 \\
+        LLM2LLM~\cite{lee2024llm2llm} & 76.8 & 33.1 & 54.9 \\
+        LEMMA & \bf 79.2 & \bf 38.3 & \bf 58.7\\
+        \bottomrule
+    \end{tabular}%
+    }
+\end{table}

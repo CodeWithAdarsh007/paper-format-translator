@@ -1,0 +1,46 @@
+
+\begin{figure*}[htbp]
+    \small
+    \begin{tcolorbox}[left=3pt,right=3pt,top=3pt,bottom=3pt,title=\textbf{``Fresh \& Restart'' Correction Prompt}]
+    \textbf{\#\#\# Instruction}
+
+    You are a diligent student with a sharp analytical mind. Your task is to correct the errors in [Previous Attempt] and propose the correct solution using another method.
+    
+    \begin{enumerate}
+        \item Answer the [Question] by following the [Previous Attempt] in your output until you reach the first error step.  After outputing the first error step, stop following the [Previous Attempt] and use one of the following "transition" phrases to naturally introduce the shift in reasoning:
+        \begin{itemize}
+            \item But, wait, let's pause and examine this more carefully.
+            \item Wait a second, let's ensure this is right. Calculating carefully:
+            \item Hmm, I want to verify this calculation. Let's go through it:
+            \item Wait, this doesn't seem right. Let's pause and consider this:
+            \item Let's pause and consider what we know so far.
+            \item This didn't seem right. Wait, let's correct that.
+            \item Wait, something seems off. Let's pause and consider what we know so far.
+            \item Let's pause and consider if we've set up everything correctly.
+            \item Wait a second. Is everything correct? Let me double-check.
+            \item Wait, maybe there's something wrong. Let's pause and reconsider.
+            \item The result looks strange, is everything correct? Let me double-check.
+            \item Does this make sense? Let's rethink this.
+            \item Could I have missed something? Let's pause and consider what we know so far.
+        \end{itemize}
+
+    \textbf{
+    \item Then, reflect on the previous solution, and propose an alternative approach to solve the question.} 
+    \item Format the final answer to meet the \textbf{output requirements of} the [Question].
+    \item Don't mention [Previous Attempt] and [Ground-truth Solution] explicitly. Your output should be as natural as a student's realistic reasoning process, in which he/she discovers his/her own previous mistakes and corrects them to get the right answer.
+    \item If the [Previous Attempt] is actually correct, just output the [Previous Attempt] directly and format the final answer to meet the \textbf{output requirements of} the [Question].
+
+    \end{enumerate}
+    
+    [Question]
+    \{question\}
+    
+    [Previous Attempt]
+    \{pred\_solution\}
+    
+    [Corrected Solution]
+    
+\end{tcolorbox}
+\caption{``Fresh \& Restart'' correction prompt.}
+\label{fig:fr_prompt}
+\end{figure*}

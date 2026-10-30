@@ -1,0 +1,109 @@
+\subsection{Additional Experiment}
+\label{sec:additional_exp}
+
+\subsubsection{Experiment on Other Base Models}
+To further validate the robustness of our method across different models, we conduct additional experiments using Mistral-7B-v0.1 and Qwen2-Math-7B as base models. The results, presented in Tab.\ref{tab:additional_result}, demonstrate that LEMMA consistently outperforms baseline methods on these models. Specifically, LEMMA achieves an average accuracy improvement of at least 2.9\% on \textit{Mistral-7B-v0.1} and 3.5\% on \textit{Qwen2-Math-7B}. These consistent performance gains across different base models reinforce the robustness of our approach, highlighting LEMMA's efficacy in enhancing mathematical reasoning capabilities across a diverse range of models.
+
+\subsubsection{Experiment using Other Teacher Model}
+
+To facilitate the community, we evaluate the performance of our approach using an open-source teacher model, LLaMA-3.1-Nemotron-70B, instead of GPT-4o. The results, presented in Tab.\ref{tab:llama3_teacher}, indicate that although there is a performance decrease when replacing the teacher model, \textbf{LEMMA still maintains a significant advantage over baseline methods}. This indicates that the improvements achieved by LEMMA do not stem from the teacher model itself but are primarily due to the effectiveness of the systematic error introduction and correction strategy. The consistent improvement further underscores the robustness of LEMMA.
+
+\subsubsection{Evaluation using Majority Voting}
+\label{sec:maj_vote}
+
+We present the accuracy results under the Majority@32 setting in Tab.\ref{tab:maj_vote}. The results demonstrate that \textbf{LEMMA consistently outperforms baseline methods in both Pass@1 and Majority@32 settings across most tasks.} Notably, the Majority@32 setting significantly enhances LEMMA's accuracy compared to Pass@1, particularly on more challenging datasets such as MATH. For instance, \textbf{LEMMA achieves improvements of 14.8\% and 13.0\% on MATH for LLaMA3 and DeepSeek-Math, respectively.} In contrast, some baseline methods exhibit limited gains under the Majority@32 setting. For example, RefAug-90k shows only 7.6\% and 8.1\% improvements on MATH for LLaMA3 and DeepSeek-Math, respectively. These findings further underscore LEMMA's superiority and its compatibility with majority voting.
+
+\subsubsection{Ablation Study on Out-of-Distribution Datasets}
+
+We report the ablation performance on both in-distribution and out-of-distribution tasks in Tab.\ref{tab:ablation_all}. The results show that removing either the ``error augmentation'' module or the ``Fresh \& Restart'' correction strategy degrades performance, validating the design of our LEMMA approach.  
+
+\subsubsection{Error Type Analysis on GSM8K}
+\input{figure/tex/error_type_pie_chart_gsm8k}
+\input{figure/tex/error_type_before_after}
+
+In this section, we examine the error types on the GSM8K dataset. We observe a similar trend to that on MATH: the distribution of error types is consistent across different models. However, unlike MATH, the primary error types on GSM8K are ``Question Misinterpretation (QM)'', ``Calculation Error (CA)'' and ``Confusing Concept Error (CC)'', while ``Formula Confusion Error (FC)'', which is common on MATH, is less frequent on GSM8K. This difference stems from the inherent distinctions between the GSM8K and MATH datasets. The MATH dataset is more challenging, often involving complex mathematical formulas, whereas GSM8K is relatively simpler, with many problems requiring only basic arithmetic operations rather than the application of formulas. As a result, formula-related errors are less common on GSM8K.
+
+In Fig.\ref{fig:error_type_before_after}, we present the changes in error types on GSM8K before and after fine-tuning. The results align with those observed on MATH, demonstrating that \textbf{LEMMA consistently reduces the frequency of all error types.} In contrast, while the overall performance of the model improves after fine-tuning with the original training data (SFT), certain specific type of error increase. This further highlights LEMMA's ability to systematically address and mitigate a wide range of errors, leading to more robust and reliable mathematical reasoning capabilities.
+
+\subsection{Case Study}
+\label{sec:case_study}
+
+\subsubsection{Reflection and Self-Correction Output}
+
+
+In Fig.\ref{fig:case_study_gsm8k} and Fig.\ref{fig:case_study_math}, we present examples from GSM8K and MATH, respectively, showcasing the outputs of the LLaMA3 model fine-tuned with our LEMMA data. These examples demonstrate that LEMMA model consciously identify potential errors in its previously generated steps, reflecting upon them and making necessary corrections, or verifying its answers before reaching a final conclusion. This ability explains why our method significantly improves accuracy in mathematical tasks: by enhancing the model's reflection and correction skills, it can ultimately rectify mistakes and arrive at the correct answer, even if it initially takes a wrong approach or makes careless errors along reasoning path.
+
+\subsubsection{Full Error Taxonomy}
+We present the full error taxonomy in \textbf{Table~\ref{tab:error_taxonomy_full}}. Building upon the taxonomy proposed by \citet{li-etal-2024-evaluating-mathematical}, we introduce additional error categories to enable a more granular identification of error types. Specifically, we add ``Question Misinterpretation Error (QM)'', ``Confusing Concept Error (CC)'', and ``Nonsensical Output (NO)'' to better capture the diverse range of errors that can occur during mathematical reasoning. The expanded taxonomy provides a structured framework for systematically categorizing and addressing the various types of errors encountered in mathematical problem-solving.
+
+
+\subsubsection{Error Type and Corresponding Examples}
+
+In this section, we present examples of different error types generated by the model. As shown in Fig.\ref{fig:error_type_examples}, we display the problem, the model-generated incorrect answer, the error type label assigned by the model, as well as the model's explanation for the label of representative error types. It can be observed that the model accurately identifies the first error type. Each error type exhibits distinct characteristics, clearly differentiating them from one another.
+
+\subsubsection{Smart Solution \textit{v.s.} Brute Force Solution}
+\input{figure/two_solution}
+
+In Fig.\ref{fig:two_solution}, we illustrate two typical solutions for solving a given problem: a smart solution and a brute force solution. While the brute force method starts with accurate initial steps, it requires complex calculations in the following steps. If the model initially fails to identify the smart solution, simply correcting the first incorrect step in the brute force solution does not easily lead to the correct final answer due to the complexity of subsequent calculations. Consequently, we propose the ``Fresh \& Restart'' correction strategy, which encourages the teacher model to reconsider and generate new solutions. This strategy enables the model to learn a variety of correction techniques, thereby allowing it to rectify errors more flexibly.
+
+\subsection{Experiment Setup}
+\subsubsection{Implementation Details of LEMMA}
+\label{sec:lemma_details}
+We construct the incorrect-correct reasoning trajectories on the training set of MATH~\cite{hendrycksmath2021} and GSM8K~\cite{cobbe2021training}. We use \textit{GPT-4o}~\cite{hurst2024gpt} as the teacher model in our main experiment. Additionally, we employ an open-source model, \textit{LLaMA-3.1-Nemotron-70B}~\cite{wang2024helpsteer2}, as an alternative teacher model to demonstrate the generalization of our method, which produces similar results, as shown in Tab.\ref{tab:llama3_teacher}. To collect incorrect-correct reasoning trajectories based on the questions in the MetaMath dataset, we use \textit{LLaMA-3.1-Nemotron-70B} as the teacher model to reduce computational costs, given that MetaMath is significantly larger than MATH~\cite{hendrycksmath2021} and GSM8K~\cite{cobbe2021training}. 
+For trajectory synthesis, we use nucleus sampling with a temperature of $0.7$ and top\_p of $1.0$. Based on our synthesized data, we fine-tune a wide range of base models, including general-purpose models such as LLaMA3-8B and Mistral-7B-v0.1, as well as the math-specialized model DeepSeekMath-7B and Qwen2-Math-7B.
+We use the LLAMA-Factory package~\footnote{\url{https://github.com/hiyouga/LLaMA-Factory}} for model training. We adopt a learning rate of 1e-5 with a warmup ratio of $0.03$.  We employ a cosine learning rate scheduler and set the gradient accumulation step to 8 to ensure stable training. 
+All models are trained for 3 epochs. For evaluation, we use official evaluation package in Qwen2.5-Math repository~\footnote{\url{https://github.com/QwenLM/Qwen2.5-Math/tree/main/evaluation}}. We set the maximum number of generated tokens to $1024$ and the temperature to 0 for the Pass@1 metric. For the majority voting setting, we set the temperature to $0.7$ and top\_p to $1.0$. 
+
+All our experiments were conducted on a server equipped with 8 x A100 GPUs. Training LLaMA3-8B on our synthesized dataset takes approximately 5 hours. 
+
+\subsubsection{Implementation Details of Baselines}
+\label{sec:baseline_details}
+
+
+We compare LEMMA with four self-correction methods and four data augmentation approaches. For self-correction methods, we consider:
+(1) \textbf{Intrinsic Self-Correction (ISC)}~\cite{han2024small}: Teaching small language models to self-correct by training on the constructed self-correction data. In our reimplementation, we employ \textit{GPT-4o} instead of \textit{GPT-3.5-Turbo} to construct the self-correction data, ensuring the improvements are not attributed to model discrepancy. We synthesize $86.78k$ data in total, which aligns with LEMMA in quantity, to guarantee a fair comparison. Because the original prompt from their paper, ``Please select the correct option from the provided choices and offer a comprehensive problem-solving process'' is designed for multi-choice problems. We adapt this to our needs by using the prompt, ``Below is an instruction that describes a task. Write a response that appropriately completes the request. \#\#\# Instruction: {instruction} \#\#\# Response: Let's think step by step'' for the initial chain-of-thought (COT) generation. We then follow their official prompt ``the answer of [Question] is [Ground-Truth]. Please provide a step-by-step explanation for resolving the given problem'' to generate the correct solution using \textit{GPT-4o}.
+(2) \textbf{S$^3$C-MATH}~\cite{yan2024s}: Employing a step-level sampling approach to generate potentially erroneous steps, followed by reflection and improvement, to construct self-correction data. Note S$^3$C-MATH synthesizes a total of $927k$ data based on MetaMath training set. Therefore, it should be compared with LEMMA (w/ MetaMath).
+(3) \textbf{RefAug}~\cite{zhang-etal-2024-learn}: Appending a ``reflection'' part to the original solution, which involves proposing an alternative solution and solving a similar problem. We use the officially released ``reflection'' data and augment it with approximately the same amount of synthetic solutions generated by \textit{GPT-4-Turbo}, as this configuration yields the best results in their paper. Our reimplementation of RefAug on most tasks is slightly better than the original results reported in their paper.
+(4) \textbf{RefAug-90k}~\cite{zhang-etal-2024-learn}: To eliminate the influence of sample size and the annotation model, we employ the official code\footnote{\url{https://github.com/ytyz1307zzh/RefAug}} of RefAug to generate three correct reflection sections and three correct solutions for each question-answer pair using \textit{GPT-4o}. This produces $89.82k$ data, which aligns with our approach in terms of both sample size and annotation model.
+
+For data augmentation approaches, we consider:
+(1) \textbf{SFT}: Training on the union of GSM8K and MATH training set.
+(2) \textbf{Rejection Sampling Fine-tuning (RFT)}~\cite{yuan2023scaling}: Training on the correct self-generated reasoning trajectories. 
+We collect a total $86.52k$ of data, which aligns with our LEMMA in quantity, isolating the impact of sample size.
+(3) \textbf{MetaMath}~\cite{yumetamath}: Combining answer augmentation, question rephrasing, and two backward reasoning methods, FOBAR~\cite{jiang2024forward} and Self-Verification~\cite{weng2023large}, to augment training data.
+(4) \textbf{GPTAug}: Prompting \textit{GPT-4o} to generate step-by-step solution for each question. We generate a total $88.92k$ of data, consistent in quantity with our LEMMA, to ensure fair comparison.
+
+Please refer to Tab.\ref{tab:data_size} for an overview of data statistics of the different methods.
+
+\subsection{Prompt}
+\label{sec:prompt}
+
+In Fig.\ref{fig:introduce_error_prompt}, Fig.\ref{fig:ff_prompt}, and Fig.\ref{fig:fr_prompt}, we present the prompts used for error injection, Fix \& Continue correction, and Fresh \& Restart correction, respectively. The prompts are designed to guide the teacher model in generating erroneous trajectories and correcting them using the two distinct strategies outlined in our methodology. 
+
+\subsection{Comparison with Additional Baselines}
+\input{table/additional_baseline}
+\noindent To further illustrate the advantages of our method, we conduct additional experiments comparing LEMMA with additional baselines. The results are in Tab.\ref{tab:additional_baseline}. Among these baselines, \citet{an2023learning} bears the most similarity to ours, as it synthesizes mistake-correction data pairs by instructing GPT-4 to rectify incorrect reasoning paths generated by the reasoning model. However, it relies on ensembling errors from multiple LLMs to create diverse inaccurate reasoning paths, which can be prone to generating irrelevant inaccurate reasoning paths that the student model would not typically make. Furthermore, their method neglects different correction strategies, which restricts the model's ability to reflect and self-correction. Our two core innovations—(1) the error-type grounded mistake augmentation method and (2) mixed correction strategies (``Fix \& Continue'' and ``Fresh \& Restart'')—represent novel contributions that have not been explored in previous work. To reimplement \citet{an2023learning}, we use the same prompt as them, but change the student model / teacher model from LLaMA2 / GPT-4 to LLaMA3 / GPT-4o to align with our setting. We generate correction data based on the training set of GSM8K and MATH. 
+\citet{tong2024can} constructs a dataset called ``CoTErrorSet'' includeing errors and PaLM2-annotated error causes. They also incorporate fixed prefixes ([CORRECT RATIONALE] and [INCORRECT RATIONALE]) in fine-tuning, which they refer to as ``Mistake Tuning''. However, their method does not concatenate the incorrect rationale and correct rationale, but instead adds a specific prefix in front of the rationale, which is different from ours.
+For Mistake-tuning~\cite{tong2024can}, since the ``CoTErrorSet'' in Mistake-tuning does not include any data from MATH and is generated by PaLM2, we regenerate it based on the training set of MATH and GAM8K using GPT-4o (the same as ours) and then perform the mistake tuning. LLM2LLM~\cite{lee2024llm2llm} iteratively synthesizes more data based
+on the data points that the student model fails to
+answer. Their focus is on
+sample-level augmentation through the synthesis
+of additional data points. In contrast, our method
+implements sequence-level augmentation by enriching each data point with common errors and
+subsequent reflection. We also reimplement LLM2LLM~\cite{lee2024llm2llm} using GPT-4o as the teacher model to ensure a fair comparison. The results in Tab.\ref{tab:additional_baseline} further illustrate the advantages of our method over these baselines.
+
+\input{table/data_size}
+
+\input{table/llama3_teacher}
+
+\input{table/additional_result}
+\input{table/maj_vote}
+\input{table/ablation_all}
+\input{figure/case_study}
+\input{table/error_taxonomy_full}
+\input{figure/error_type_examples}
+
+
+\input{figure/introduce_error_prompt}
+\input{figure/fix_forward}
+\input{figure/fresh_restart}

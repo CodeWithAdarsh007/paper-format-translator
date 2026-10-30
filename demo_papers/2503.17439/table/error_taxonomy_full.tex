@@ -1,0 +1,28 @@
+
+\begin{table*}[h!]
+    \centering
+    % \caption{Error taxonomy modified from~\citet{li-etal-2024-evaluating-mathematical}. We add the ``Question Misinterpretation Error(QM)'', ``Confusing Concept Error (CC)'', and ``Nonsensical Output (NO)'' to identify the error types more fine-grained. Corresponding examples are in Table~\ref{tab:error_example}.}
+    \caption{Error taxonomy adapted from~\citet{li-etal-2024-evaluating-mathematical}. We add ``Question Misinterpretation Error (QM)'', ``Confusing Concept Error (CC)'', and ``Nonsensical Output (NO)'' to allow for a more fine-grained identification of error types. Corresponding examples are provided in Figure~\ref{fig:error_type_examples}.}
+    \resizebox{\textwidth}{!}{%
+    \begin{tabular}{l|l}
+        \toprule[0.15em]
+        \textbf{Error Type} & \textbf{Definition} \\
+        \midrule
+        \textbf{Calculation Error (CA)} &  Error appears during the calculation process.  \\
+        \textbf{Counting Error (CO)}  & Error occurs during the counting process.  \\
+        \textbf{Context Value Error (CV)} & Error arises when attributes of named entities do not align with the information provided.  \\
+        \textbf{Hallucination (HA)}  & Error involves adding fictitious unrelated statements contradictory to the question.  \\
+        \textbf{Unit Conversion Error (UC)} & Error occurs during unit conversion process. \\
+        \textbf{Operator Error (OP)} & Error involves a single operator being erroneously applied within the expression. \\
+        \textbf{Formula Confusion Error (FC)} &  Error appears when applying formula in inappropriate scenario.  \\
+        \textbf{Missing Step (MS)}  & Error entails an incomplete generation of reasoning process, lacking a necessary step.\\
+        \textbf{Contradictory Step (CS)} & Error manifests inconsistency between preceding and subsequent reasoning steps.\\
+        \midrule
+        \textbf{Question Misinterpretation Error(QM)} & Error appears because the \textbf{question} is misunderstood, such as ignoring specific constraints in the question. \\
+        \textbf{Confusing Concept Error (CC)} & Error occurs because two similar but actually different concepts are mistakenly confused. \\
+        \textbf{Nonsensical Output (NO)} & Inconceivable, illogical, or question-irrelevant output.\\
+        \bottomrule[0.15em]
+    \end{tabular}%
+    }
+    \label{tab:error_taxonomy_full}
+\end{table*}

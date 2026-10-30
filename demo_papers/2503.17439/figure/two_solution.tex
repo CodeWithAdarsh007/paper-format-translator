@@ -1,0 +1,32 @@
+
+\begin{figure*}
+    \centering
+    \small
+    \begin{tcolorbox}
+        \textbf{Question}
+        $\text{Given that } x + y = \sqrt{3} \text{ and } x^2 + y^2 = 5, \text{ find the value of } x^3 + y^3.$
+
+        \textbf{Smart Solution:} 
+        First, we use the cubic sum formula: \(x^3 + y^3 = (x + y)(x^2 - xy + y^2)\).  
+We know \( x + y = \sqrt{3} \) and \( x^2 + y^2 = 5 \). To find \( x^3 + y^3 \), we need \( xy \). Using the identity \( (x + y)^2 = x^2 + 2xy + y^2 \), we have:  
+\( (\sqrt{3})^2 = 5 + 2xy \), which simplifies to  
+\( 3 = 5 + 2xy \).  
+Solving for \( xy \), we get:  
+\( 2xy = 3 - 5 = -2 \), and thus  
+\( xy = -1 \).  
+Now, substitute \( xy \) into the cubic sum formula:  
+\( x^3 + y^3 = \sqrt{3} \left( 5 - (-1) \right) \), which simplifies to  
+\( x^3 + y^3 = \sqrt{3} \left( 5 + 1 \right) \), and finally  
+\( x^3 + y^3 = \sqrt{3} \times 6 = 6\sqrt{3} \).
+
+\textbf{Brute Force Solution:}
+To find the value of \(x^3 + y^3\), we first need to solve for \(x\) and \(y\). Starting with the equation \(x + y = \sqrt{3}\), we can express \(y\) as \(y = \sqrt{3} - x\). Substituting this into the equation \(x^2 + y^2 = 5\), we get: \(x^2 + (\sqrt{3} - x)^2 = 5.\) Expanding and simplifying this equation, we have: \( x^2 + 3 - 2\sqrt{3}x + x^2 = 5, \) which simplifies further to: \( 2x^2 - 2\sqrt{3}x - 2 = 0. \)
+Dividing the entire equation by 2, we obtain: \( x^2 - \sqrt{3}x - 1 = 0. \)
+Using the quadratic formula to solve for \(x\), we find: \textcolor{red}{\( x = \frac{\sqrt{3} \pm 1}{2} \) (the first error step).
+Next, we calculate \(x^3 + y^3\) = \(\left( \frac{\sqrt{3} + 1}{2} \right)^3 + \left( \frac{\sqrt{3} - 1}{2} \right)^3. ... \)
+}
+
+    \end{tcolorbox}
+    \caption{An example of the two type of solutions. While the initial steps of the brute-force solution are correct, the subsequent process involves intensive computation. Simply correcting the first error step helps a little. Therefore, in the ``Fresh \& Restart'' correction, we encourage the teacher model to rethink from scratch and propose a new solution. All the inter-line equations are manually replaced with inline equations to save space.}
+    \label{fig:two_solution}
+\end{figure*}

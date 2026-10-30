@@ -1,0 +1,17 @@
+
+\begin{figure}[!h]
+    \centering
+    \begin{subfigure}[b]{0.49\linewidth}
+        \includegraphics[width=\linewidth]{figure/acc_size_math.pdf}
+    \caption{Pass@1 on MATH.}
+    \label{fig:acc_size_math}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.47\linewidth}
+        \includegraphics[width=\linewidth]{figure/acc_size_mathematics.pdf}
+        \caption{Pass@1 on Mathematics.}
+    \label{fig:acc_size_mathematics}
+    \end{subfigure}
+    \caption{Performance comparison with varying data size on LLaMA3-8B. LEMMA consistently demonstrates robust performance improvements in both in-distribution and out-of-distribution tasks, while baseline methods (\textit{e.g.,} ISC and RefAug) tend to plateau or even decline on out-of-distribution datasets.}
+    \label{fig:acc_size_half}
+\end{figure}
