@@ -29,23 +29,31 @@ vendored in `app/vendor/texmf/`; on Debian/Ubuntu the remaining packages come fr
 `texlive-latex-base texlive-latex-recommended texlive-latex-extra
 texlive-fonts-recommended texlive-science`.
 
-## Deploy to HuggingFace Spaces
+## Live demo
 
-Status: **not deployed yet** - the CLI is not logged in on this machine, and a
-Space can only be created under an account token.
+[https://paper-format-translator.streamlit.app](https://paper-format-translator.streamlit.app)
 
-```bash
-hf auth login                      # token with write access, from hf.co/settings/tokens
-./app/deploy_hf.sh <hf-username>   # creates the Space and uploads app/
-```
+Hosted on Streamlit Community Cloud. Click a demo paper in the sidebar for the
+instant cached path, or paste an arXiv id / upload a `.tex` for a live run.
 
-The space URL will be
-`https://<hf-username>-paper-format-translator.hf.space`.
-First build installs TeX Live via `app/packages.txt`; expect 5-10 minutes.
+GitHub: https://github.com/CodeWithAdarsh007/paper-format-translator (public,
+`main` branch, repo root is the app root).
 
-`app/` is 25.8 MB (app + 3 demo papers + cached PDFs). The ReferenceExtractor
-model (743 MB) is deliberately not bundled: references are parsed from LaTeX
-source by `sir_extractor`, so the model has no serving role.
+HuggingFace was tried first and is not available for this account: new Spaces
+accept only `gradio`/`docker`/`static` SDKs, and Docker Spaces on the free
+`cpu-basic` tier return `402 Payment Required` (PRO required). A static Space
+cannot run Streamlit or pdflatex. The Docker package is kept in `app/Dockerfile`
+for a future PRO deploy.
+
+Live hosting therefore uses **Streamlit Community Cloud**, which runs the same
+repo for free and installs TeX via `packages.txt`.
+
+Deploy: https://share.streamlit.io -> New app -> repo
+`CodeWithAdarsh007/paper-format-translator`, branch `main`, main file
+`streamlit_app.py`.
+
+The reference model (743 MB) is deliberately not bundled: references are parsed
+from LaTeX source by `sir_extractor`, so the model has no serving role.
 
 ## Layout
 
