@@ -20,6 +20,7 @@
 \usepackage{xcolor}
 \usepackage{colortbl}
 \usepackage{bm}
+\usepackage{makecell}
 {{ render_compat() }}
 {{ render_macros(macros) }}
 {{ render_title(metadata.title) }}
@@ -32,7 +33,7 @@
 {{ render_with_math(metadata.abstract | default("", true), metadata.get("abstract_math_spans") or []) }}
 \end{abstract}
 
-{% if metadata.keywords %}\keywords{ {{- metadata.keywords | map("tex") | join(", ") -}} }
+{% if metadata.keywords %}\keywords{ {{- metadata.keywords | map("texu") | join(", ") -}} }
 {% endif %}
 {% for section in sections %}{{ render_section(section, 0) }}{% endfor %}
 

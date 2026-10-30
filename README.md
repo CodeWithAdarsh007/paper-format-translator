@@ -37,12 +37,27 @@ all (477 pdflatex errors) now compiles with 0.
 Each format gets a PDF download and the generated `.tex` download. The parse
 report lists sections, figures, references, compile status and LaTeX errors.
 
-## Notes and limitations
+## Notes and limitations (Session 9.5)
 
-- Math is preserved (schema v2, see above). A PDF can still be marked *built
-  (warnings)* rather than *clean* when a paper uses packages the templates do not
-  load (`makecell`, tikz diagrams), keeps non-math Unicode glyphs, or references
-  figures that were not part of the upload.
+- **Math-mode + figure-heavy papers**: 1709.08492 (73 figures, 51 sections,
+  math.DG) previously failed 3/3 formats with a 0 MB PDF. After Session 9.5
+  (Unicode fallback + figure path handling) it compiles to valid PDFs with 0
+  errors in all three formats. Full 100%-clean compile for math/physics papers is
+  future work - see the residual macro-capture limitation.
+- **Paper-local macros** (`\DeclareMathOperator`, custom `\def`): partial capture
+  via the SIR's `macros` field. Undefined control sequences surface as warnings,
+  not hard fails (ReAct's residual 22 errors are all this class: `\reactA`,
+  `\actA`, ...).
+- **Target corpus**: cs.CL / cs.LG / cs.CV papers compile cleanly. math.DG,
+  physics, and custom-`.cls` papers have warning-tier output with documented
+  error classes.
+- Math symbols that pylatexenc emits as Unicode outside `$...$` are mapped back to
+  LaTeX (~120 symbols). Anything unmapped is reported as a warning and left as-is.
+- Figures named by the SIR are copied into each build tree at their original
+  relative paths; a figure file the source does not contain is replaced by a
+  visible placeholder instead of aborting the compile. "Tables" whose body is
+  TikZ drawing code are replaced with a placeholder too, since the target classes
+  cannot render them.
 - PDF upload is rejected on purpose: the pipeline reformats LaTeX source, not
   rendered pages.
 - The ReferenceExtractor model (`models/refext/best`, 743 MB) is **not** bundled:

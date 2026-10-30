@@ -28,6 +28,18 @@
 \providecommand{\ul}[1]{ #1}
 \providecommand{\st}[1]{ #1}
 \providecommand{\so}[1]{ #1}
+% UNICODE_MATH_MAP emits these for ® and ™; the LaTeX kernel defines them on current releases,
+% the fallback keeps older installations compiling.
+\providecommand{\textregistered}{(R)}
+\providecommand{\texttrademark}{(TM)}
+% acmart removes the deprecated font switches, but captured paper macros still expand to them
+% (1709.08492 defines \Jcurr as {\cal J}). Only defined where the class left a hole.
+\ifdefined\cal\else\let\cal\mathcal\fi
+\ifdefined\bf\else\let\bf\bfseries\fi
+\ifdefined\it\else\let\it\itshape\fi
+\ifdefined\rm\else\let\rm\rmfamily\fi
+\ifdefined\sf\else\let\sf\sffamily\fi
+\ifdefined\tt\else\let\tt\ttfamily\fi
 {%- endmacro %}
 
 {% macro render_macros(macros) -%}
@@ -37,31 +49,31 @@
 {%- endmacro %}
 
 {% macro render_title(title) -%}
-\title{ {{- title | default("Untitled", true) | tex -}} }
+\title{ {{- title | default("Untitled", true) | texu -}} }
 {%- endmacro %}
 
 {% macro authors_ieee(authors, keywords=[]) -%}
 \author{
 {%- for a in authors or [] -%}
 {%- if not loop.first %} \and {% endif -%}
-\IEEEauthorblockN{ {{- a.name | default("Anonymous", true) | tex -}} }
+\IEEEauthorblockN{ {{- a.name | default("Anonymous", true) | texu -}} }
 {%- if a.affiliation %}
-\IEEEauthorblockA{ {{- a.affiliation | tex -}} {%- if a.email %}\\ {{- a.email | tex -}} {% endif %}}
+\IEEEauthorblockA{ {{- a.affiliation | texu -}} {%- if a.email %}\\ {{- a.email | texu -}} {% endif %}}
 {%- endif -%}
 {%- endfor -%}
 {%- if keywords %}
-\thanks{Index Terms---{{ keywords | map("tex") | join(", ") -}} }
+\thanks{Index Terms---{{ keywords | map("texu") | join(", ") -}} }
 {%- endif %}
 }
 {%- endmacro %}
 
 {% macro authors_acm(authors) -%}
 {%- for a in authors or [] -%}
-\author{ {{- a.name | default("Anonymous", true) | tex -}} }
+\author{ {{- a.name | default("Anonymous", true) | texu -}} }
 {%- if a.affiliation %}
-\affiliation{\institution{ {{- a.affiliation | tex -}} }}
+\affiliation{\institution{ {{- a.affiliation | texu -}} }}
 {%- endif -%}
-{%- if a.email %}\email{ {{- a.email | tex -}} }{% endif %}
+{%- if a.email %}\email{ {{- a.email | texu -}} }{% endif %}
 {%- endfor -%}
 {%- endmacro %}
 
@@ -70,14 +82,14 @@
 \author{
 {%- for a in people -%}
 {%- if not loop.first %} \and {% endif -%}
-{{- a.name | default("Anonymous", true) | tex -}} \inst{ {{- loop.index -}} }
+{{- a.name | default("Anonymous", true) | texu -}} \inst{ {{- loop.index -}} }
 {%- endfor %}
 }
 \institute{
 {%- for a in people -%}
 {%- if not loop.first %} \and {% endif -%}
-\inst{ {{- loop.index -}} } {{- a.affiliation | default("Unspecified", true) | tex -}}
-{%- if a.email %} \email{ {{- a.email | tex -}} }{% endif %}
+{{- a.affiliation | default("Unspecified", true) | texu -}}
+{%- if a.email %} \email{ {{- a.email | texu -}} }{% endif %}
 {%- endfor %}
 }
 {%- endmacro %}
@@ -179,10 +191,20 @@
 {%- endmacro %}
 
 {% macro render_floats(figures, tables) -%}
+{#- Floats are emitted as one block, after the body. TeX keeps at most ~18 pending floats; past
+    that it reports "Too many unprocessed floats", the output routine retries without shipping a
+    page and the job dies on 100 dead cycles (1709.08492: 73 figures + 6 tables). Flushing every
+    20 keeps the pending queue under the limit for any paper that has more floats than pages. -#}
 {%- for f in figures or [] %}
 {{ render_figure(f) }}
+{%- if loop.index % 20 == 0 %}
+\clearpage
+{%- endif -%}
 {%- endfor -%}
 {%- for t in tables or [] %}
 {{ render_table(t) }}
+{%- if loop.index % 20 == 0 %}
+\clearpage
+{%- endif -%}
 {%- endfor -%}
 {%- endmacro %}

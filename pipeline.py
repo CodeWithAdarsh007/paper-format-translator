@@ -91,6 +91,111 @@ def _extract_sir(source_dir: Path, papers_root: str | None):
                                      papers_root=papers_root)
 
 
+FIGURE_EXTS = ("", ".pdf", ".png", ".jpg", ".jpeg", ".eps")
+_INCLUDEGRAPHICS_RE = re.compile(r"\\includegraphics(\[[^\]]*\])?\{([^}]+)\}")
+
+
+def _normalise_figure_path(raw) -> str:
+    p = str(raw or "").strip().strip("{}").strip().replace("\\", "/")
+    # ".." comes from a source bundle, so it must not escape the build dir; the basename index
+    # still resolves a legitimate "../figs/x.png" (flattened arXiv sources do this).
+    return "/".join(seg for seg in p.split("/") if seg not in ("", ".", ".."))
+
+
+def _figure_paths(sir: dict) -> list[str]:
+    seen, out = set(), []
+    for fig in sir.get("figures") or []:
+        if not isinstance(fig, dict) or not fig.get("path"):
+            continue
+        p = _normalise_figure_path(fig["path"])
+        if p and p.lower() not in seen:
+            seen.add(p.lower())
+            out.append(p)
+    return out
+
+
+def _basename_index(source_dir: Path) -> dict:
+    index = {}
+    try:
+        for p in source_dir.rglob("*"):
+            if p.is_file() and p.suffix.lower() in (".pdf", ".png", ".jpg", ".jpeg", ".eps"):
+                index.setdefault(p.name.lower(), p)
+    except OSError:
+        pass
+    return index
+
+
+def copy_figures(sir: dict, source_dir: Path, build_dir: Path) -> dict:
+    """Copy the images the SIR names into the build dir at the SIR's own relative paths.
+
+    The document is rebuilt from scratch, so a path like ``figs/plot.pdf`` only means something
+    if the build tree has the same shape as the source tree. Exact path -> extension variants ->
+    a unique basename elsewhere in the tree; anything still missing is reported and gets a
+    placeholder (see apply_figure_fallbacks) instead of a 0-byte PDF.
+    """
+    source_dir, build_dir = Path(source_dir), Path(build_dir)
+    paths = _figure_paths(sir)
+    copied, missing, remapped = [], [], {}
+    index = None
+    for rel in paths:
+        src, found = None, rel
+        stem, ext = os.path.splitext(rel)
+        for cand in [rel] + [stem + a for a in FIGURE_EXTS[1:] if a != ext.lower()]:
+            p = source_dir / cand
+            if p.is_file():
+                src, found = p, cand
+                break
+        if src is None:
+            if index is None:
+                index = _basename_index(source_dir)
+            hit = index.get(os.path.basename(rel).lower())
+            if hit is not None:
+                src, found = hit, (stem + hit.suffix if not ext else rel[:-len(ext)] + hit.suffix)
+        if src is None:
+            missing.append(rel)
+            continue
+        # An extensionless SIR path must land under the real suffix, or graphicx will not find it;
+        # a different extension is only usable if the tex argument is rewritten to match.
+        dst_rel = rel if (ext and found == rel) else (found if ext else rel + src.suffix)
+        if dst_rel != rel:
+            remapped[rel] = dst_rel
+        try:
+            (build_dir / dst_rel).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(src, build_dir / dst_rel)
+            copied.append(dst_rel)
+        except OSError:
+            missing.append(rel)
+    return {"requested": len(paths), "copied": len(copied), "missing": len(missing),
+            "copied_names": copied, "missing_names": missing, "remapped": remapped}
+
+
+def apply_figure_fallbacks(tex: str, missing_paths, remapped=None) -> tuple[str, int]:
+    """Point \\includegraphics at a substituted file, or at a visible placeholder when none exists.
+
+    A missing image is a hard TeX error ("File ... not found") that can take the whole compile
+    with it; the placeholder keeps the float, the caption and the numbering.
+    """
+    wanted = {_normalise_figure_path(p).lower() for p in missing_paths or []}
+    swaps = {_normalise_figure_path(k).lower(): v for k, v in (remapped or {}).items()}
+    if not wanted and not swaps:
+        return tex, 0
+    count = 0
+
+    def repl(m):
+        nonlocal count
+        path = _normalise_figure_path(m.group(2))
+        opts = m.group(1) or ""
+        if path.lower() in swaps:
+            count += 1
+            return "\\includegraphics" + opts + "{" + swaps[path.lower()] + "}"
+        if path.lower() not in wanted:
+            return m.group(0)
+        count += 1
+        return "\\fbox{\\textit{[Figure: " + renderer.protect_tex(path) + "]}}"
+
+    return _INCLUDEGRAPHICS_RE.sub(repl, tex), count
+
+
 def _pdf_pages(pdf_path: Path) -> int:
     # pdflatex's "Output written on ..." line wraps on long temp paths, so read the PDF.
     try:
@@ -174,20 +279,33 @@ def _compile(tex: str, build_dir: Path, source_dir: Path) -> tuple[dict, bytes |
 
 
 def _render_and_compile(sir_path: Path, work_dir: Path, source_dir: Path,
-                        formats) -> dict:
+                        formats, sir: dict | None = None) -> dict:
     papers = {}
     for fmt in formats:
         entry = {"status": "failed", "pdf": None, "tex": None, "pdf_bytes": 0,
-                 "pages": 0, "error_count": 0, "errors": [], "warnings": []}
+                 "pages": 0, "error_count": 0, "errors": [], "warnings": [],
+                 "figures": {}}
         try:
             tex, rinfo = renderer.render(str(sir_path), fmt, str(TEMPLATES_DIR))
         except Exception as exc:  # renderer raises on bad format / unreadable SIR only
             entry["errors"] = [f"render failed: {exc}"]
             papers[fmt] = entry
             continue
-        entry["tex"] = tex
         entry["warnings"] = rinfo.get("warnings", [])
-        comp, pdf = _compile(tex, work_dir / f"{fmt}_build", source_dir)
+        build_dir = work_dir / f"{fmt}_build"
+        if sir is not None:
+            figs = copy_figures(sir, source_dir, build_dir)
+            if figs["missing"] or figs.get("remapped"):
+                tex, touched = apply_figure_fallbacks(tex, figs["missing_names"],
+                                                      figs.get("remapped"))
+                figs["placeholders"] = touched
+            if figs["missing"]:
+                entry["warnings"].append(
+                    f"{figs['missing']} figure file(s) missing from the source "
+                    f"-> placeholder ({', '.join(figs['missing_names'][:3])})")
+            entry["figures"] = figs
+        entry["tex"] = tex
+        comp, pdf = _compile(tex, build_dir, source_dir)
         entry.update(comp)
         entry["pdf"] = pdf
         papers[fmt] = entry
@@ -215,6 +333,7 @@ def _build_result(sir: dict, papers: dict, formats, source_label: str,
             "pdf_bytes": {f: papers[f].get("pdf_bytes", 0) for f in formats},
             "pages": {f: papers[f].get("pages", 0) for f in formats},
             "error_count": {f: papers[f].get("error_count", 0) for f in formats},
+            "figure_handling": {f: papers[f].get("figures", {}) for f in formats},
             "elapsed_s": round(elapsed, 1),
         },
     }
@@ -238,7 +357,7 @@ def _process_source_dir(source_dir: Path, work_dir: Path, source_label: str,
 
     sir_path = work_dir / "sir.json"
     sir_path.write_text(json.dumps(sir, ensure_ascii=False), encoding="utf-8")
-    papers = _render_and_compile(sir_path, work_dir, source_dir, formats)
+    papers = _render_and_compile(sir_path, work_dir, source_dir, formats, sir=sir)
     result = _build_result(sir, papers, formats, source_label, time.time() - t0)
     if not result["success"]:
         reasons = []

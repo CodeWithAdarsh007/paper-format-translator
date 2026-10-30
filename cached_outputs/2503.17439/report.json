@@ -15,24 +15,74 @@
   "figures": 15,
   "parse_warnings": [],
   "compile_status": {
-    "ieee": "built",
-    "acm": "built",
-    "lncs": "built"
+    "ieee": "clean",
+    "acm": "clean",
+    "lncs": "clean"
   },
   "pdf_bytes": {
-    "ieee": 254861,
-    "acm": 673068,
-    "lncs": 334507
+    "ieee": 1072510,
+    "acm": 1488967,
+    "lncs": 1150148
   },
   "pages": {
     "ieee": 14,
     "acm": 14,
-    "lncs": 35
+    "lncs": 34
   },
   "error_count": {
-    "ieee": 8,
-    "acm": 8,
-    "lncs": 9
+    "ieee": 0,
+    "acm": 0,
+    "lncs": 0
   },
-  "elapsed_s": 19.5
+  "figure_handling": {
+    "ieee": {
+      "requested": 7,
+      "copied": 7,
+      "missing": 0,
+      "copied_names": [
+        "figure/lemma_small_fig.pdf",
+        "figure/lemma_wide_fig.pdf",
+        "figure/error-type_pie_chart_llama_math.pdf",
+        "figure/error_type_bar_math.pdf",
+        "figure/acc_size_math.pdf",
+        "figure/error_type_before_after_llama_math.pdf",
+        "figure/pdf/error-type_pie_chart_llama_gsm8k.pdf"
+      ],
+      "missing_names": [],
+      "remapped": {}
+    },
+    "acm": {
+      "requested": 7,
+      "copied": 7,
+      "missing": 0,
+      "copied_names": [
+        "figure/lemma_small_fig.pdf",
+        "figure/lemma_wide_fig.pdf",
+        "figure/error-type_pie_chart_llama_math.pdf",
+        "figure/error_type_bar_math.pdf",
+        "figure/acc_size_math.pdf",
+        "figure/error_type_before_after_llama_math.pdf",
+        "figure/pdf/error-type_pie_chart_llama_gsm8k.pdf"
+      ],
+      "missing_names": [],
+      "remapped": {}
+    },
+    "lncs": {
+      "requested": 7,
+      "copied": 7,
+      "missing": 0,
+      "copied_names": [
+        "figure/lemma_small_fig.pdf",
+        "figure/lemma_wide_fig.pdf",
+        "figure/error-type_pie_chart_llama_math.pdf",
+        "figure/error_type_bar_math.pdf",
+        "figure/acc_size_math.pdf",
+        "figure/error_type_before_after_llama_math.pdf",
+        "figure/pdf/error-type_pie_chart_llama_gsm8k.pdf"
+      ],
+      "missing_names": [],
+      "remapped": {}
+    }
+  },
+  "elapsed_s": 22.1
 }

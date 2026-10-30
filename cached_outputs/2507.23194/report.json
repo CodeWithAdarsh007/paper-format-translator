@@ -15,14 +15,14 @@
   "figures": 3,
   "parse_warnings": [],
   "compile_status": {
-    "ieee": "built",
+    "ieee": "clean",
     "acm": "clean",
-    "lncs": "built"
+    "lncs": "clean"
   },
   "pdf_bytes": {
-    "ieee": 343102,
-    "acm": 713645,
-    "lncs": 405716
+    "ieee": 351952,
+    "acm": 713226,
+    "lncs": 397038
   },
   "pages": {
     "ieee": 8,
@@ -30,9 +30,47 @@
     "lncs": 19
   },
   "error_count": {
-    "ieee": 2,
+    "ieee": 0,
     "acm": 0,
-    "lncs": 3
+    "lncs": 0
   },
-  "elapsed_s": 17.2
+  "figure_handling": {
+    "ieee": {
+      "requested": 3,
+      "copied": 3,
+      "missing": 0,
+      "copied_names": [
+        "figures/GEAK_pipeline.png",
+        "figures/log_linear_tritonbench_mi300.png",
+        "figures/log_linear_rocm_mi300.png"
+      ],
+      "missing_names": [],
+      "remapped": {}
+    },
+    "acm": {
+      "requested": 3,
+      "copied": 3,
+      "missing": 0,
+      "copied_names": [
+        "figures/GEAK_pipeline.png",
+        "figures/log_linear_tritonbench_mi300.png",
+        "figures/log_linear_rocm_mi300.png"
+      ],
+      "missing_names": [],
+      "remapped": {}
+    },
+    "lncs": {
+      "requested": 3,
+      "copied": 3,
+      "missing": 0,
+      "copied_names": [
+        "figures/GEAK_pipeline.png",
+        "figures/log_linear_tritonbench_mi300.png",
+        "figures/log_linear_rocm_mi300.png"
+      ],
+      "missing_names": [],
+      "remapped": {}
+    }
+  },
+  "elapsed_s": 15.4
 }

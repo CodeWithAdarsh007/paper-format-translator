@@ -17,12 +17,12 @@
   "compile_status": {
     "ieee": "clean",
     "acm": "clean",
-    "lncs": "built"
+    "lncs": "clean"
   },
   "pdf_bytes": {
-    "ieee": 3633760,
-    "acm": 3950306,
-    "lncs": 3696765
+    "ieee": 3633763,
+    "acm": 3950291,
+    "lncs": 3688399
   },
   "pages": {
     "ieee": 12,
@@ -32,7 +32,63 @@
   "error_count": {
     "ieee": 0,
     "acm": 0,
-    "lncs": 1
+    "lncs": 0
   },
-  "elapsed_s": 23.2
+  "figure_handling": {
+    "ieee": {
+      "requested": 9,
+      "copied": 9,
+      "missing": 0,
+      "copied_names": [
+        "imgs/overview.png",
+        "imgs/frameworkdag.png",
+        "imgs/gtigraph.png",
+        "imgs/mnistExpComp.png",
+        "imgs/ffhqdag.png",
+        "imgs/tix.png",
+        "imgs/test.png",
+        "imgs/ffhq-gt.png",
+        "imgs/ffhqtest.png"
+      ],
+      "missing_names": [],
+      "remapped": {}
+    },
+    "acm": {
+      "requested": 9,
+      "copied": 9,
+      "missing": 0,
+      "copied_names": [
+        "imgs/overview.png",
+        "imgs/frameworkdag.png",
+        "imgs/gtigraph.png",
+        "imgs/mnistExpComp.png",
+        "imgs/ffhqdag.png",
+        "imgs/tix.png",
+        "imgs/test.png",
+        "imgs/ffhq-gt.png",
+        "imgs/ffhqtest.png"
+      ],
+      "missing_names": [],
+      "remapped": {}
+    },
+    "lncs": {
+      "requested": 9,
+      "copied": 9,
+      "missing": 0,
+      "copied_names": [
+        "imgs/overview.png",
+        "imgs/frameworkdag.png",
+        "imgs/gtigraph.png",
+        "imgs/mnistExpComp.png",
+        "imgs/ffhqdag.png",
+        "imgs/tix.png",
+        "imgs/test.png",
+        "imgs/ffhq-gt.png",
+        "imgs/ffhqtest.png"
+      ],
+      "missing_names": [],
+      "remapped": {}
+    }
+  },
+  "elapsed_s": 28.2
 }

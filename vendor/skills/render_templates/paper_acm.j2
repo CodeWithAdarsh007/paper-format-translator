@@ -15,6 +15,7 @@
 \usepackage{tabularx}
 \usepackage{colortbl}
 \usepackage{bm}
+\usepackage{makecell}
 {{ render_compat() }}
 {{ render_macros(macros) }}
 {{ authors_acm(metadata.authors) }}
@@ -26,7 +27,7 @@
 {{ render_with_math(metadata.abstract | default("", true), metadata.get("abstract_math_spans") or []) }}
 \end{abstract}
 
-{% if metadata.keywords %}\keywords{ {{- metadata.keywords | map("tex") | join(", ") -}} }
+{% if metadata.keywords %}\keywords{ {{- metadata.keywords | map("texu") | join(", ") -}} }
 {% endif %}
 \maketitle
 
