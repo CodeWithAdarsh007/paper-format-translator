@@ -20,19 +20,19 @@
     "lncs": "built"
   },
   "pdf_bytes": {
-    "ieee": 280253,
-    "acm": 703946,
-    "lncs": 365792
+    "ieee": 254861,
+    "acm": 673068,
+    "lncs": 334507
   },
   "pages": {
-    "ieee": 13,
-    "acm": 13,
-    "lncs": 32
+    "ieee": 14,
+    "acm": 14,
+    "lncs": 35
   },
   "error_count": {
-    "ieee": 157,
-    "acm": 86,
-    "lncs": 177
+    "ieee": 8,
+    "acm": 8,
+    "lncs": 9
   },
-  "elapsed_s": 25.5
+  "elapsed_s": 19.5
 }

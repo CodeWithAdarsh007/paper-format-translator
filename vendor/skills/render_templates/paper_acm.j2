@@ -5,8 +5,8 @@
     as a phantom lead-in section. \title, \begin{abstract} and \keywords stay before \maketitle, which
     is acmart's hard ordering rule; all three are already invisible to the paragraph scan.
 -#}
-{% from "_shared.j2" import render_title, authors_acm, render_section, render_floats,
-        render_references with context %}
+{% from "_shared.j2" import render_title, render_macros, render_compat, authors_acm, render_section,
+        render_floats, render_references with context %}
 \documentclass[sigconf]{acmart}
 {#- acmart already loads graphicx, amsmath, amssymb and xcolor, so only the table packages it does
     not provide are added here. -#}
@@ -15,13 +15,15 @@
 \usepackage{tabularx}
 \usepackage{colortbl}
 \usepackage{bm}
+{{ render_compat() }}
+{{ render_macros(macros) }}
 {{ authors_acm(metadata.authors) }}
 \begin{document}
 
 {{ render_title(metadata.title) }}
 
 \begin{abstract}
-{{ metadata.abstract | default("", true) | tex }}
+{{ render_with_math(metadata.abstract | default("", true), metadata.get("abstract_math_spans") or []) }}
 \end{abstract}
 
 {% if metadata.keywords %}\keywords{ {{- metadata.keywords | map("tex") | join(", ") -}} }

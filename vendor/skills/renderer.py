@@ -19,6 +19,11 @@ unpaired $ opens math mode, so the renderer escapes all of them; sir_extractor u
 on the way back out, which is what makes the round trip exact rather than what breaks it
 (measured on 21,512 fields: 0.9994 surviving, versus 0.9963 if the text is emitted verbatim).
 
+Math (SIR schema v2, Session 9): a v2 field carries ``math_spans`` -- raw LaTeX lifted out by the
+extractor before pylatexenc could turn ``\\in`` into ``∈`` and drop the ``$``. After escaping, each
+``«MATH_<i>»`` placeholder is replaced by its raw span *with delimiters*, so the output compiles in
+math mode. A v1 field has no ``math_spans``; it falls back to plain escaping, unchanged.
+
 Nothing raises: missing title/authors/sections/references fall back to placeholders and are
 reported in the returned warnings list.
 """
@@ -51,6 +56,58 @@ def protect_tex(s):
     return _PROTECT_RE.sub(lambda g: BS + g.group(1), str(s))
 
 
+# protect_tex() escapes the "_" inside «MATH_<i>» as "\_", so the pattern must accept both forms.
+_PLACEHOLDER_RE = re.compile(r"«MATH\\?_(\d+)»")
+
+
+def math_delimited(span):
+    """A span dict -> raw LaTeX wrapped in its original delimiters. Unknown delimiters fall back
+    to ``$...$``, which is valid for any math-mode content."""
+    raw = span.get("raw")
+    raw = "" if raw is None else str(raw)
+    delims = span.get("delims") or "$"
+    if delims == "$$":
+        return "$$" + raw + "$$"
+    if delims == "\\(":
+        return "\\(" + raw + "\\)"
+    if delims == "\\[":
+        return "\\[" + raw + "\\]"
+    if delims == "\\begin{math}":
+        return "\\begin{math}" + raw + "\\end{math}"
+    if delims == "\\begin{displaymath}":
+        return "\\begin{displaymath}" + raw + "\\end{displaymath}"
+    return "$" + raw + "$"
+
+
+def render_with_math(text, math_spans=None):
+    """Escape LaTeX in *text* but put each ``math_spans`` entry back as raw math.
+
+    The placeholders are ``«MATH_<i>»``; neither ``«`` nor ``»`` is in the protect list, so
+    escaping leaves them intact and the substitution happens afterwards. A placeholder without a
+    matching span is dropped rather than printed.
+    """
+    text = "" if text is None else str(text)
+    if not math_spans:
+        return protect_tex(text)
+    spans = {}
+    for span in math_spans:
+        if not isinstance(span, dict):
+            continue
+        try:
+            spans[int(span.get("index"))] = span
+        except (TypeError, ValueError):
+            continue
+    escaped = protect_tex(text)
+    if not spans:
+        return _PLACEHOLDER_RE.sub("", escaped)
+
+    def swap(m):
+        span = spans.get(int(m.group(1)))
+        return "" if span is None else math_delimited(span)
+
+    return _PLACEHOLDER_RE.sub(swap, escaped)
+
+
 def citekey(s):
     """A \\bibitem/\\ref argument must survive both bibtex and LaTeX, so keep the safe subset."""
     if s is None:
@@ -81,6 +138,59 @@ def insert_label(latex, label):
 DEFAULT_TEMPLATES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                      "render_templates")
 
+_MACRO_DEF_NAME_RE = re.compile(
+    r"^\\(?:providecommand|DeclareMathOperator)\s*\{\s*\\([A-Za-z]+)\s*\}"
+    r"|^\\def\s*\\([A-Za-z]+)")
+_WALK_SKIP_KEYS = {"macros", "source", "extracted_at", "schema_version", "paper_id",
+                   "source_format", "parse_warnings"}
+
+
+def _sir_strings(obj):
+    """Every string in a SIR except provenance/bookkeeping (notably ``macros`` itself)."""
+    if isinstance(obj, str):
+        yield obj
+    elif isinstance(obj, dict):
+        for k, v in obj.items():
+            if k not in _WALK_SKIP_KEYS:
+                yield from _sir_strings(v)
+    elif isinstance(obj, (list, tuple)):
+        for v in obj:
+            yield from _sir_strings(v)
+
+
+def select_macros(definitions, sir):
+    """Keep only the definitions the rendered document can actually reach.
+
+    Unused definitions are not just noise: a macro that collides with a package command, or that
+    needs a package the template does not load, would break a paper that otherwise compiles. The
+    closure is transitive because ``\\norm`` may be defined in terms of ``\\set``.
+    """
+    by_name = {}
+    for d in definitions or []:
+        if not isinstance(d, str):
+            continue
+        m = _MACRO_DEF_NAME_RE.search(d.strip())
+        name = (m.group(1) or m.group(2)) if m else None
+        if name:
+            by_name.setdefault(name, d.strip())
+    if not by_name:
+        return []
+    blob = "\n".join(_sir_strings(sir))
+
+    def mentions(name, text):
+        return re.search("\\\\" + re.escape(name) + r"(?![A-Za-z])", text) is not None
+
+    used, frontier = set(), [n for n in by_name if mentions(n, blob)]
+    while frontier:
+        name = frontier.pop()
+        if name in used:
+            continue
+        used.add(name)
+        for other in by_name:
+            if other not in used and mentions(other, by_name[name]):
+                frontier.append(other)
+    return [d for n, d in by_name.items() if n in used]
+
 
 def _env(templates_dir=None):
     from jinja2 import Environment, FileSystemLoader
@@ -92,6 +202,7 @@ def _env(templates_dir=None):
     ed.filters["citekey"] = citekey
     ed.filters["graphpath"] = graphic_path
     ed.globals["insert_label"] = insert_label
+    ed.globals["render_with_math"] = render_with_math
     return ed
 
 
@@ -127,6 +238,7 @@ def build_context(sir, fmt, warnings):
         "tables": sir.get("tables") or [],
         "equations": sir.get("equations") or [],
         "references": refs,
+        "macros": select_macros(sir.get("macros") or [], sir),
         "format": fmt,
         "paper_id": sir.get("paper_id") or "",
     }

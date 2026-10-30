@@ -15,24 +15,24 @@
   "figures": 9,
   "parse_warnings": [],
   "compile_status": {
-    "ieee": "built",
-    "acm": "built",
+    "ieee": "clean",
+    "acm": "clean",
     "lncs": "built"
   },
   "pdf_bytes": {
-    "ieee": 3592529,
-    "acm": 2565059,
-    "lncs": 3654503
+    "ieee": 3633760,
+    "acm": 3950306,
+    "lncs": 3696765
   },
   "pages": {
-    "ieee": 11,
-    "acm": 10,
-    "lncs": 24
+    "ieee": 12,
+    "acm": 11,
+    "lncs": 27
   },
   "error_count": {
-    "ieee": 386,
-    "acm": 383,
-    "lncs": 387
+    "ieee": 0,
+    "acm": 0,
+    "lncs": 1
   },
-  "elapsed_s": 33.1
+  "elapsed_s": 23.2
 }

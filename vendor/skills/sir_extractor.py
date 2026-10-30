@@ -38,7 +38,7 @@ import re
 import sys
 from datetime import datetime, timezone
 
-SCHEMA_VERSION = "1.0"
+SCHEMA_VERSION = "2.0"
 FORMATS = ("original", "ieee", "acm", "lncs")
 
 # recompile.py writes "\documentclass{llncs}" for the "lncs" key; the identifier on disk is lncs.
@@ -68,6 +68,9 @@ LIST_ENVS = {"itemize": "itemize", "enumerate": "enumerate", "description": "ite
 FIGURE_ENVS = {"figure", "figure*", "wrapfigure", "float", "sidewaysfigure"}
 TABLE_ENVS = {"table", "table*", "longtable", "sidewaystable", "tabularx"}
 SKIP_ENVS = {"abstract", "thebibliography"}          # consumed by metadata / references
+# Drawing instructions, not prose. Recursing into them turns diagram labels ("π_PC") into Unicode
+# text outside math; the templates do not load tikz, so the diagram cannot be reproduced anyway.
+DIAGRAM_ENVS = {"tikzcd", "tikzpicture", "pgfpicture", "pspicture", "picture"}
 NOISE_COMMANDS = (
     r"\\maketitle\b", r"\\tableofcontents\b", r"\\bibliographystyle\s*\{[^{}]*\}",
     r"\\bibliography\s*\{[^{}]*\}", r"\\addcontentsline\s*\{[^{}]*\}(?:\s*\{[^{}]*\}){2}",
@@ -84,6 +87,28 @@ _ENV_BEGIN_RE = re.compile(r"\\begin\s*\{([^}]*)\}")
 _LABEL_RE = re.compile(r"\\label\s*\{([^{}]*)\}")
 _DISPLAY_MATH_RE = re.compile(r"(?<!\\)\\\[(.+?)(?<!\\)\\\]", re.S)
 _TEX_ID_RE = re.compile(r"^\d{4}\.\d{4,5}(v\d+)?$")
+
+# ---- math-span preservation (schema v2, Session 9) -------------------------------------------
+# latex_to_text() runs pylatexenc, which turns ``\in`` into ``∈`` and drops the ``$`` delimiters.
+# The SIR then held ``x ∈ A`` with nothing marking it as math, and the renderer emitted ``∈`` in
+# text mode: one "Missing $ inserted" per character. So math is lifted out of the raw source
+# BEFORE pylatexenc, replaced by «MATH_<i>», and put back verbatim (with delimiters) at render
+# time. Guillemets are used because they appear in no LaTeX special-character list, so neither
+# the text converter nor the renderer's escaper touches them.
+MATH_PLACEHOLDER = "«MATH_{i}»"
+MATH_PLACEHOLDER_RE = re.compile(r"«MATH_\d+»")
+# Order matters: $$ before $, and \ensuremath is handled separately because its argument is
+# brace-delimited rather than pattern-delimited.
+INLINE_MATH_PATTERNS = (
+    (re.compile(r"\$\$(.+?)\$\$", re.S), "$$", True),
+    (re.compile(r"(?<!\\)\$(?!\$)(.+?)(?<!\\)\$(?!\$)", re.S), "$", True),
+    (re.compile(r"\\\((.+?)\\\)", re.S), "\\(", False),
+    (re.compile(r"\\\[(.+?)\\\]", re.S), "\\[", False),
+    (re.compile(r"\\begin\{math\}(.+?)\\end\{math\}", re.S), "\\begin{math}", False),
+    (re.compile(r"\\begin\{displaymath\}(.+?)\\end\{displaymath\}", re.S),
+     "\\begin{displaymath}", False),
+)
+_ENSUREMATH_RE = re.compile(r"\\ensuremath\s*\{")
 
 
 # ------------------------------------------------------------------ text primitives
@@ -209,6 +234,159 @@ def latex_to_text(s: str) -> str:
     if key is not None and len(_L2T_CACHE) < 8192:
         _L2T_CACHE[key] = out
     return out
+
+
+def _unescaped_dollars(s: str) -> int:
+    """Count ``$`` that are not ``\\$`` escapes (``\\`` consumes the next char, so ``\\$`` is not)."""
+    n, i, L = 0, 0, len(s)
+    while i < L:
+        if s[i] == "\\":
+            i += 2
+            continue
+        if s[i] == "$":
+            n += 1
+        i += 1
+    return n
+
+
+def _ensuremath_spans(text: str, spans: list):
+    """``\\ensuremath{...}`` wraps math without delimiters. Its argument is brace-delimited, so it
+    cannot go through the regex table; it is re-emitted as ``$...$``, which is equivalent in text
+    mode. Arguments that themselves contain ``$`` are left for the normal pass."""
+    out, i = [], 0
+    while True:
+        m = _ENSUREMATH_RE.search(text, i)
+        if not m:
+            out.append(text[i:])
+            break
+        inner, after = match_braces(text, m.end() - 1)
+        if "$" in inner or "\\ensuremath" in inner:
+            out.append(text[i:m.end()])
+            i = m.end()
+            continue
+        out.append(text[i:m.start()])
+        idx = len(spans)
+        spans.append({"raw": inner, "delims": "$", "index": idx})
+        out.append(MATH_PLACEHOLDER.format(i=idx))
+        i = after
+    return "".join(out)
+
+
+def extract_math_spans(text: str, warnings: list = None):
+    """Replace math spans in *raw* LaTeX with ``«MATH_<i>»`` placeholders.
+
+    Must run before ``latex_to_text``: once pylatexenc has turned ``\\in`` into ``∈`` and dropped
+    the delimiters the span cannot be recognised any more. Returns ``(text_with_placeholders,
+    spans)`` where each span is ``{"raw": ..., "delims": ..., "index": ...}``.
+
+    An odd number of unescaped ``$`` in a segment means the dollars are not a usable delimiter pair
+    (a literal ``$5``), so no dollar-based span is extracted and ``unmatched_math_delimiter`` is
+    recorded. ``\\$`` is always literal.
+    """
+    if not text:
+        return text, []
+    spans = []
+    out = _ensuremath_spans(text, spans)
+    dollar_ok = _unescaped_dollars(out) % 2 == 0
+    if not dollar_ok and warnings is not None:
+        warnings.append("unmatched_math_delimiter")
+    for pat, delims, uses_dollar in INLINE_MATH_PATTERNS:
+        if uses_dollar and not dollar_ok:
+            continue
+
+        def replacer(m, delims=delims):
+            idx = len(spans)
+            spans.append({"raw": m.group(1), "delims": delims, "index": idx})
+            return MATH_PLACEHOLDER.format(i=idx)
+
+        out = pat.sub(replacer, out)
+    return out, spans
+
+
+def text_with_math(raw: str, warnings: list = None):
+    """Raw LaTeX -> (plain text with placeholders, math spans). The one entry point every
+    text-bearing SIR field goes through since v2."""
+    clean, spans = extract_math_spans(raw or "", warnings)
+    return norm_ws(latex_to_text(clean)), spans
+
+
+# ---- paper-local macro definitions (schema v2) -----------------------------------------------
+# Preserving math ($M_n(\R)$) without the source preamble makes every paper-local macro an
+# "Undefined control sequence": 238 of 254 post-fix errors on 2312.00001 were exactly that.
+# These are the constructor forms whose meaning is self-contained enough to re-emit; theorem
+# declarations, counters and package setup are not, and the rebuilt body never uses them.
+_MACRO_CTOR_RE = re.compile(
+    r"\\(newcommand|renewcommand|providecommand|DeclareRobustCommand|DeclareMathOperator)\*?")
+_DEF_RE = re.compile(r"\\def\s*\\([A-Za-z]+)(?![A-Za-z])")
+
+
+def _skip_ws(text: str, i: int) -> int:
+    while i < len(text) and text[i] in " \t\r\n":
+        i += 1
+    return i
+
+
+def collect_macro_definitions(preamble: str):
+    """Canonical, re-emittable user macros from the preamble.
+
+    ``\\newcommand`` and friends become ``\\providecommand`` so an accidental collision with a
+    loaded package is silent instead of an error; ``\\def`` is kept verbatim (it redefines
+    silently by design). Duplicate names keep the first definition, which is what the source's
+    own compile would have used.
+    """
+    defs = {}
+    text = preamble or ""
+    for m in _MACRO_CTOR_RE.finditer(text):
+        ctor = m.group(1)
+        i = _skip_ws(text, m.end())
+        if i < len(text) and text[i] == "{":
+            name, i = match_braces(text, i)
+            name = name.strip()
+        else:
+            nm = re.match(r"\\[A-Za-z]+", text[i:])
+            if not nm:
+                continue
+            name, i = nm.group(0), i + nm.end()
+        if not re.fullmatch(r"\\[A-Za-z]+", name) or "@" in name:
+            continue
+        nargs, default = None, None
+        while True:
+            j = _skip_ws(text, i)
+            if j < len(text) and text[j] == "[":
+                k = text.find("]", j)
+                if k < 0:
+                    break
+                if nargs is None:
+                    nargs = text[j + 1:k].strip()
+                elif default is None:
+                    default = text[j + 1:k]
+                i = k + 1
+                continue
+            break
+        j = _skip_ws(text, i)
+        if j >= len(text) or text[j] != "{":
+            continue
+        body, _ = match_braces(text, j)
+        key = name[1:]
+        if key in defs:
+            continue
+        if ctor == "DeclareMathOperator":
+            defs[key] = f"\\DeclareMathOperator{{{name}}}{{{body}}}"
+        else:
+            opt = f"[{nargs}]" if nargs else ""
+            if opt and default is not None:
+                opt += f"[{default}]"
+            defs[key] = f"\\providecommand{{{name}}}{opt}{{{body}}}"
+    for m in _DEF_RE.finditer(text):
+        key = m.group(1)
+        if key in defs or "@" in key:
+            continue
+        k = text.find("{", m.end())
+        if k < 0:
+            continue
+        _body, after = match_braces(text, k)
+        defs[key] = text[m.start():after]
+    return [defs[k] for k in defs]
 
 
 def clean_heading(s: str) -> str:
@@ -596,14 +774,18 @@ def extract_metadata(preamble: str, body: str, warnings: list):
     if not ab:
         ab = re.search(r"\\begin\s*\{abstract\}(.*?)\\end\s*\{abstract\}", preamble, re.S)
     if ab:
-        md["abstract"] = norm_ws(latex_to_text(ab.group(1)))
+        raw_ab = ab.group(1)
     else:
         am = re.search(r"\\abstract\s*\{", body + preamble)
+        raw_ab = None
         if am:
-            inner, _ = match_braces(body + preamble, am.end() - 1)
-            md["abstract"] = norm_ws(latex_to_text(inner))
+            raw_ab, _ = match_braces(body + preamble, am.end() - 1)
         else:
             warnings.append("no abstract found")
+    if raw_ab is not None:
+        md["abstract"], ab_spans = text_with_math(raw_ab, warnings)
+        if ab_spans:
+            md["abstract_math_spans"] = ab_spans
     kw_src = body + "\n" + preamble
     m = re.search(r"\\keywords\s*\{", kw_src)
     if m:
@@ -631,7 +813,9 @@ def parse_figure(inner: str, warnings: list):
         if lab:
             fig["label"] = lab.group(1).strip()
             text = _LABEL_RE.sub(" ", text)
-        fig["caption"] = norm_ws(latex_to_text(text))
+        fig["caption"], spans = text_with_math(text, warnings)
+        if spans:
+            fig["math_spans"] = spans
     ig = re.search(r"\\includegraphics\s*(?:\[[^\]]*\])?\s*\{([^{}]*)\}", inner)
     if ig:
         fig["path"] = ig.group(1).strip()
@@ -660,7 +844,9 @@ def parse_table(inner: str, warnings: list):
         if lab:
             tab["label"] = lab.group(1).strip()
             text = _LABEL_RE.sub(" ", text)
-        tab["caption"] = norm_ws(latex_to_text(text))
+        tab["caption"], spans = text_with_math(text, warnings)
+        if spans:
+            tab["math_spans"] = spans
     body = re.search(r"\\begin\s*\{((?:tabular|tabularx|array|nicematrix|bmatrix|IEEEeqnarray)"
                      r"\*?)\}\s*(?:\[[^\]]*\])?\s*\{", inner)
     if body:
@@ -684,21 +870,35 @@ def parse_math(inner: str, env: str, whole: str):
     latex = whole.strip()
     if lab:
         latex = latex.replace(lab.group(0), "").strip()
+    # Removing a \label that sat on its own line leaves a whitespace-only line, and a blank line
+    # inside align/equation is a TeX error ("Missing $ inserted", "\par ended"): the rendered PDF
+    # lost the whole display. Collapse blank lines; inside math they can only be a defect.
+    latex = re.sub(r"\n\s*\n", "\n", latex)
     return {"label": lab.group(1).strip() if lab else None, "latex": latex, "env": env}
 
 
-def parse_list(inner: str, kind: str):
+def parse_list(inner: str, kind: str, warnings: list = None):
     """``\\item`` separated entries. Any lead-in text before the first ``\\item`` is dropped, and
-    ``description`` entries keep only their term+body after the optional label argument."""
+    ``description`` entries keep only their term+body after the optional label argument.
+
+    v2: ``math_spans`` is a list parallel to ``items`` (one span list per item, ``[]`` for an item
+    without math), present only when at least one item carries math.
+    """
     parts = re.split(r"\\item\b(?:\[[^\]]*\])?", inner)
-    items = []
+    items, item_spans = [], []
     for chunk in parts[1:]:
-        txt = norm_ws(latex_to_text(chunk))
+        txt, spans = text_with_math(chunk, warnings)
         if txt:
             items.append(txt)
-    if not items and norm_ws(latex_to_text(parts[0])):
-        items = [norm_ws(latex_to_text(parts[0]))]
-    return {"type": kind, "items": items}
+            item_spans.append(spans)
+    if not items:
+        txt, spans = text_with_math(parts[0], warnings)
+        if txt:
+            items, item_spans = [txt], [spans]
+    block = {"type": kind, "items": items}
+    if any(item_spans):
+        block["math_spans"] = item_spans
+    return block
 
 
 # ------------------------------------------------------------------ references
@@ -1029,15 +1229,17 @@ def scan_blocks(text: str, ctx: dict, depth: int = 0):
     while pos < n:
         nxt = _next_construct(text, pos, ctx["label_kinds"])
         if nxt is None:
-            blocks.extend(paragraphs(text[pos:]))
+            blocks.extend(paragraphs(text[pos:], ctx["warnings"]))
             break
         kind, start, end, payload = nxt
         if start > pos:
-            blocks.extend(paragraphs(text[pos:start]))
+            blocks.extend(paragraphs(text[pos:start], ctx["warnings"]))
         if kind == "env":
             env, inner_start, inner_end, after = payload
             inner = text[inner_start:inner_end]
             if env in SKIP_ENVS:
+                pass
+            elif env in DIAGRAM_ENVS:
                 pass
             elif env in FIGURE_ENVS:
                 f = parse_figure(inner, ctx["warnings"])
@@ -1058,13 +1260,16 @@ def scan_blocks(text: str, ctx: dict, depth: int = 0):
                     ctx["labels"].setdefault(e["label"], e["latex"])
                 blocks.append({"type": "equation", "latex": e["latex"], "label": e["label"]})
             elif env in LIST_ENVS:
-                blocks.append(parse_list(inner, LIST_ENVS[env]))
+                blocks.append(parse_list(inner, LIST_ENVS[env], ctx["warnings"]))
             elif depth < 6 and env not in ("verbatim", "lstlisting", "minted"):
                 blocks.extend(scan_blocks(inner, ctx, depth + 1))
             else:
-                txt = norm_ws(latex_to_text(inner))
+                txt, spans = text_with_math(inner, ctx["warnings"])
                 if txt:
-                    blocks.append({"type": "paragraph", "text": txt})
+                    block = {"type": "paragraph", "text": txt}
+                    if spans:
+                        block["math_spans"] = spans
+                    blocks.append(block)
         elif kind == "math":
             e = parse_math(payload, "display", text[start:end])
             ctx["equations"].append(e)
@@ -1105,6 +1310,13 @@ def _next_construct(text: str, pos: int, kinds=None):
     m = re.compile(r"(?<!\\)\\\[").search(text, pos)
     if m:
         close = re.compile(r"(?<!\\)\\\]").search(text, m.end())
+        stop = close.start() if close else len(text)
+        cands.append(("math", m.start(), (close.end() if close else len(text)), text[m.end():stop]))
+    # Display $$...$$: without this the scan split at the first \begin{array}/\begin{cases}
+    # *inside* the math, leaving two fragments whose odd dollar counts could not be extracted.
+    m = re.compile(r"(?<!\\)\$\$").search(text, pos)
+    if m:
+        close = re.compile(r"(?<!\\)\$\$").search(text, m.end())
         stop = close.start() if close else len(text)
         cands.append(("math", m.start(), (close.end() if close else len(text)), text[m.end():stop]))
     m = _CITE_RE.search(text, pos)
@@ -1182,13 +1394,19 @@ def _read_first_arg(text: str, pos: int):
     return None
 
 
-def paragraphs(chunk: str):
-    """Prose between structures, split on blank lines. Comments are already gone."""
+def paragraphs(chunk: str, warnings: list = None):
+    """Prose between structures, split on blank lines. Comments are already gone.
+
+    Math is lifted out before latex_to_text (v2): otherwise ``$x \\in A$`` becomes ``x ∈ A`` and
+    the renderer later emits ``∈`` outside math mode, which pdflatex rejects per character."""
     out = []
     for part in re.split(r"\n\s*\n", chunk):
-        txt = norm_ws(latex_to_text(part))
+        txt, spans = text_with_math(part, warnings)
         if txt and re.search(r"[A-Za-z0-9]", txt):
-            out.append({"type": "paragraph", "text": txt})
+            block = {"type": "paragraph", "text": txt}
+            if spans:
+                block["math_spans"] = spans
+            out.append(block)
     return out
 
 
@@ -1210,7 +1428,11 @@ def build_sections(body: str, ctx: dict):
         cur["blocks"].extend(scan_blocks(body[pos:m.start()], ctx))
         if cur["blocks"] or cur["heading"] is not None:
             sections.append(cur)
-        cur = {"level": _SECTION_LEVEL.get(name, 1), "heading": clean_heading(inner), "blocks": []}
+        heading_src, heading_spans = extract_math_spans(inner, ctx["warnings"])
+        cur = {"level": _SECTION_LEVEL.get(name, 1), "heading": clean_heading(heading_src),
+               "blocks": []}
+        if heading_spans:
+            cur["math_spans"] = heading_spans
         pos = after
     cur["blocks"].extend(scan_blocks(body[pos:], ctx))
     if cur["blocks"] or cur["heading"] is not None or not sections:
@@ -1239,7 +1461,7 @@ def extract_sir(input_path: str, source_format: str = "original", papers_root: s
            "extracted_at": datetime.now(timezone.utc).isoformat(), "source": {},
            "metadata": {"title": "", "authors": [], "abstract": "", "keywords": []},
            "sections": [], "figures": figures, "tables": tables, "equations": equations,
-           "references": [], "labels": {}, "counts": {}, "parse_warnings": warnings}
+           "references": [], "macros": [], "labels": {}, "counts": {}, "parse_warnings": warnings}
     try:
         if os.path.isdir(input_path):
             paper_dir = input_path
@@ -1329,6 +1551,7 @@ def extract_sir(input_path: str, source_format: str = "original", papers_root: s
                            scan_body, flags=re.S)
 
         md = extract_metadata(preamble, body, warnings)
+        sir["macros"] = collect_macro_definitions(preamble)
         ctx = {"warnings": warnings, "figures": figures, "tables": tables,
                "equations": equations, "labels": {}, "n_cites": 0,
                "label_kinds": collect_label_kinds(scan_body)}

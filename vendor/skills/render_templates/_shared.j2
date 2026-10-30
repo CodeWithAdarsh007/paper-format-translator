@@ -8,7 +8,33 @@
   9,567 fields survive, versus 0.9963 if the text is emitted verbatim.
 
   tables[].latex and equations[].latex are verbatim LaTeX and are NEVER protected.
+
+  Math (schema v2): a field may carry ``math_spans``; its text then holds «MATH_<i>» placeholders
+  that render_with_math() swaps back for the raw math after escaping. The guillemets survive both
+  the extractor's text conversion and protect_tex(). A v1 SIR has no math_spans and takes the
+  plain ``| tex`` path unchanged.
 -#}
+
+{% macro render_compat() -%}
+% Commands that preserved table/equation LaTeX uses but whose package a template may not load.
+% \providecommand is a no-op wherever the real package does define them (acmart loads natbib).
+\providecommand{\citep}[2][]{ \cite{ #2}}
+\providecommand{\citet}[2][]{ \cite{ #2}}
+\providecommand{\citealp}[2][]{ \cite{ #2}}
+\providecommand{\citeauthor}[2][]{ #2}
+\providecommand{\citeyear}[2][]{}
+\providecommand{\sethlcolor}[1]{}
+\providecommand{\hl}[1]{ #1}
+\providecommand{\ul}[1]{ #1}
+\providecommand{\st}[1]{ #1}
+\providecommand{\so}[1]{ #1}
+{%- endmacro %}
+
+{% macro render_macros(macros) -%}
+{%- for d in macros or [] %}
+{{ d }}
+{%- endfor %}
+{%- endmacro %}
 
 {% macro render_title(title) -%}
 \title{ {{- title | default("Untitled", true) | tex -}} }
@@ -58,8 +84,11 @@
 
 {% macro render_block(block) -%}
 {%- set t = block.get("type") -%}
+{#- The trailing newline is load-bearing: blocks are glued with a single "\n", so without it two
+    consecutive paragraphs would become one LaTeX paragraph (and, since v2, one re-extraction chunk,
+    which renumbers the «MATH_i» placeholders and breaks the round trip). -#}
 {%- if t == "paragraph" -%}
-{{ block.get("text", "") | tex }}
+{{ render_with_math(block.get("text", ""), block.get("math_spans") or []) ~ "\n" }}
 
 {%- elif t == "equation" -%}
 {%- set body = block.get("latex") or "" -%}
@@ -71,9 +100,10 @@
 
 {%- endif -%}
 {%- elif t in ("itemize", "enumerate") -%}
+{%- set item_spans = block.get("math_spans") or [] -%}
 \begin{ {{- t -}} }
 {%- for it in block.get("items") or [] %}
-\item {{ it | tex }}
+\item {{ render_with_math(it, item_spans[loop.index0] if loop.index0 < item_spans | length else []) }}
 {%- endfor %}
 \end{ {{- t -}} }
 
@@ -94,11 +124,12 @@
 {% macro render_section(section, depth=0) -%}
 {%- set level = section.get("level", 1) -%}
 {%- set heading = section.get("heading") -%}
+{%- set heading_tex = render_with_math(heading, section.get("math_spans") or []) if heading is not none else "" -%}
 {%- if heading is not none and heading | trim -%}
-{%- if level == 1 %}\section{ {{- heading | tex -}} }
-{%- elif level == 2 %}\subsection{ {{- heading | tex -}} }
-{%- elif level == 3 %}\subsubsection{ {{- heading | tex -}} }
-{%- else %}\paragraph{ {{- heading | tex -}} }
+{%- if level == 1 %}\section{ {{- heading_tex -}} }
+{%- elif level == 2 %}\subsection{ {{- heading_tex -}} }
+{%- elif level == 3 %}\subsubsection{ {{- heading_tex -}} }
+{%- else %}\paragraph{ {{- heading_tex -}} }
 {%- endif %}
 
 {%- elif level >= 1 %}\section{}
@@ -115,7 +146,7 @@
 {%- if fig.get("path") %}
 \includegraphics[width=\linewidth]{ {{- fig["path"] | graphpath -}} }
 {%- endif %}
-\caption{ {{- fig.get("caption") | default("", true) | tex -}}
+\caption{ {{- render_with_math(fig.get("caption") or "", fig.get("math_spans") or []) -}}
 {%- if fig.get("label") %} \label{ {{- fig["label"] | citekey -}} }{% endif %} }
 \end{figure}
 
@@ -124,7 +155,7 @@
 {% macro render_table(tab) -%}
 \begin{table}[t]
 \centering
-\caption{ {{- tab.get("caption") | default("", true) | tex -}}
+\caption{ {{- render_with_math(tab.get("caption") or "", tab.get("math_spans") or []) -}}
 {%- if tab.get("label") %} \label{ {{- tab["label"] | citekey -}} }{% endif %} }
 {{ tab.get("latex") or "" }}
 \end{table}
@@ -142,7 +173,7 @@
 {% macro render_references(refs) -%}
 \begin{thebibliography}{99}
 {%- for r in refs or [] %}
-\bibitem{ {{- r.get("key") | citekey -}} } {{ r.get("raw") | default("", true) | tex }}
+\bibitem{ {{- r.get("key") | citekey -}} } {{ render_with_math(r.get("raw") or "", r.get("math_spans") or []) }}
 {%- endfor %}
 \end{thebibliography}
 {%- endmacro %}

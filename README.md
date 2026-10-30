@@ -1,79 +1,67 @@
+---
+title: Paper Format Translator
+emoji: 📄
+colorFrom: indigo
+colorTo: purple
+sdk: docker
+app_port: 7860
+pinned: false
+license: apache-2.0
+---
+
 # Paper Format Translator
 
-Cross-venue manuscript reformatting: one LaTeX paper in, IEEE / ACM / Springer
-LNCS documents out.
+Cross-venue manuscript reformatting. One LaTeX manuscript goes in; IEEE, ACM and
+Springer LNCS documents come out, rebuilt from structure rather than relabelled.
 
-A paper's source is parsed into a Structured Intermediate Representation (SIR),
-rebuilt from structure through venue-specific Jinja2 templates, and compiled with
-pdflatex. Round-trip fidelity is **0.9915 F1 over 810 papers** (rebuilt documents
-re-extracted and compared field by field), with 48 tests passing.
+The pipeline parses the source into a Structured Intermediate Representation
+(SIR), re-renders a complete document from SIR content through venue templates,
+and compiles it with pdflatex. Round-trip fidelity (render, then re-extract) is
+**0.9934 F1 over 810 papers**, i.e. the rebuilt paper still reads back as the
+same paper.
 
-## Run the web app
+Math is preserved end to end (SIR schema v2): `$...$`, `$$...$$`, `\(...\)`,
+`\[...\]` and `\ensuremath{...}` spans are lifted out of the source before text
+flattening and re-emitted inside their original delimiters, and paper-local
+preamble macros travel with the SIR. A math-heavy paper that failed to build at
+all (477 pdflatex errors) now compiles with 0.
+
+## How to use it
+
+- **Demo papers** (sidebar): three pre-rendered papers served from cache. Instant,
+  no network, no TeX required - this is what to use on demo/viva day.
+- **arXiv ID tab**: fetches the source from arXiv, reformats it live (30-60 s).
+- **Upload tab**: pick a `.tex` file. Figures are not uploaded, so figure links in
+  the rebuilt document may break; text, sections, tables and references survive.
+
+Each format gets a PDF download and the generated `.tex` download. The parse
+report lists sections, figures, references, compile status and LaTeX errors.
+
+## Notes and limitations
+
+- Math is preserved (schema v2, see above). A PDF can still be marked *built
+  (warnings)* rather than *clean* when a paper uses packages the templates do not
+  load (`makecell`, tikz diagrams), keeps non-math Unicode glyphs, or references
+  figures that were not part of the upload.
+- PDF upload is rejected on purpose: the pipeline reformats LaTeX source, not
+  rendered pages.
+- The ReferenceExtractor model (`models/refext/best`, 743 MB) is **not** bundled:
+  reference parsing happens in `sir_extractor` from the LaTeX source, so the model
+  has no serving role. Torch/transformers are therefore not installed either.
+
+## Run locally
 
 ```bash
-cd app
 pip install -r requirements.txt
+# LaTeX: MiKTeX or TeX Live must provide pdflatex, IEEEtran.cls, acmart.cls, llncs.cls
 streamlit run streamlit_app.py
 ```
 
-Open http://localhost:8501.
+On this machine the validated pipeline lives in `skills/`; the app vendors
+read-only copies in `vendor/skills/` so it is self-contained. Set `PFT_SKILLS_DIR`
+to point at a different checkout, `PDFLATEX` to point at a different binary.
 
-- **Demo papers** in the sidebar load from `app/cached_outputs/` - instant, no
-  network, no TeX required. Use these on demo day.
-- **arXiv ID** fetches the source from arXiv and reformats it live (30-60 s).
-- **Upload** takes a `.tex` file. Figures are not uploaded, so figure links may
-  break; text, sections, tables and references survive.
+## Credits
 
-LaTeX needs `pdflatex` plus the IEEEtran / acmart / llncs classes. The classes are
-vendored in `app/vendor/texmf/`; on Debian/Ubuntu the remaining packages come from
-`texlive-latex-base texlive-latex-recommended texlive-latex-extra
-texlive-fonts-recommended texlive-science`.
-
-## Live demo
-
-[https://paper-format-translator.streamlit.app](https://paper-format-translator.streamlit.app)
-
-Hosted on Streamlit Community Cloud. Click a demo paper in the sidebar for the
-instant cached path, or paste an arXiv id / upload a `.tex` for a live run.
-
-GitHub: https://github.com/CodeWithAdarsh007/paper-format-translator (public,
-`main` branch, repo root is the app root).
-
-HuggingFace was tried first and is not available for this account: new Spaces
-accept only `gradio`/`docker`/`static` SDKs, and Docker Spaces on the free
-`cpu-basic` tier return `402 Payment Required` (PRO required). A static Space
-cannot run Streamlit or pdflatex. The Docker package is kept in `app/Dockerfile`
-for a future PRO deploy.
-
-Live hosting therefore uses **Streamlit Community Cloud**, which runs the same
-repo for free and installs TeX via `packages.txt`.
-
-Deploy: https://share.streamlit.io -> New app -> repo
-`CodeWithAdarsh007/paper-format-translator`, branch `main`, main file
-`streamlit_app.py`.
-
-The reference model (743 MB) is deliberately not bundled: references are parsed
-from LaTeX source by `sir_extractor`, so the model has no serving role.
-
-## Layout
-
-```
-app/                     Streamlit app, pipeline wrapper, vendored skills, demo cache
-  streamlit_app.py       UI
-  pipeline.py            process_arxiv / process_tex / process_paper_dir
-  cached_outputs/        3 demo papers x 3 PDFs + report.json
-  demo_papers/           the 3 demo sources (CC-BY-4.0)
-  vendor/skills/         read-only copies of sir_extractor, renderer, templates
-  vendor/texmf/          IEEEtran.cls, acmart.cls, llncs.cls
-results/session8_report.md   what was built, tested and why
-results/screenshots/         4 UI screenshots
-skill sources live in D:/OpenCode/skills (read-only for this session)
-```
-
-## Notes
-
-- Math-in-text and paper-local macros are not reconstructed, so a rebuilt PDF can
-  carry non-fatal pdflatex warnings; the app reports compile status per format
-  instead of hiding it.
-- PDF upload is rejected on purpose: the pipeline reformats LaTeX source, not
-  rendered pages.
+arXiv papers used in the demo are CC-BY-4.0; their ids and titles are shown in the
+sidebar and in `cached_outputs/<id>/report.json`.

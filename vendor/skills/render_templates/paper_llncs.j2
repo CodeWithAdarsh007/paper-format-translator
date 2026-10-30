@@ -6,8 +6,8 @@
     environment, so it is already invisible to the paragraph scan and stays in the body, where llncs
     expects it after the abstract.
 -#}
-{% from "_shared.j2" import render_title, authors_llncs, render_section, render_floats,
-        render_references with context %}
+{% from "_shared.j2" import render_title, render_macros, render_compat, authors_llncs, render_section,
+        render_floats, render_references with context %}
 \documentclass{llncs}
 \usepackage{graphicx}
 \usepackage{amsmath}
@@ -17,8 +17,11 @@
 \usepackage{booktabs}
 \usepackage{multirow}
 \usepackage{tabularx}
+\usepackage{xcolor}
 \usepackage{colortbl}
 \usepackage{bm}
+{{ render_compat() }}
+{{ render_macros(macros) }}
 {{ render_title(metadata.title) }}
 {{ authors_llncs(metadata.authors) }}
 \begin{document}
@@ -26,7 +29,7 @@
 \maketitle
 
 \begin{abstract}
-{{ metadata.abstract | default("", true) | tex }}
+{{ render_with_math(metadata.abstract | default("", true), metadata.get("abstract_math_spans") or []) }}
 \end{abstract}
 
 {% if metadata.keywords %}\keywords{ {{- metadata.keywords | map("tex") | join(", ") -}} }

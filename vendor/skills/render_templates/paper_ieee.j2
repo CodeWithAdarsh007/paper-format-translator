@@ -9,8 +9,8 @@
     \begin{document}") and leaks when it stays in the body, so the keywords ride in a \thanks note
     inside \author: legal IEEEtran, typeset on the first page, and invisible to the paragraph scan.
 -#}
-{% from "_shared.j2" import render_title, authors_ieee, render_section, render_floats,
-        render_references with context %}
+{% from "_shared.j2" import render_title, render_macros, render_compat, authors_ieee, render_section,
+        render_floats, render_references with context %}
 \documentclass[conference]{IEEEtran}
 \usepackage{graphicx}
 \usepackage{amsmath}
@@ -20,8 +20,11 @@
 \usepackage{booktabs}
 \usepackage{multirow}
 \usepackage{tabularx}
+\usepackage{xcolor}
 \usepackage{colortbl}
 \usepackage{bm}
+{{ render_compat() }}
+{{ render_macros(macros) }}
 {{ render_title(metadata.title) }}
 {{ authors_ieee(metadata.authors, metadata.keywords) }}
 \begin{document}
@@ -29,7 +32,7 @@
 \maketitle
 
 \begin{abstract}
-{{ metadata.abstract | default("", true) | tex }}
+{{ render_with_math(metadata.abstract | default("", true), metadata.get("abstract_math_spans") or []) }}
 \end{abstract}
 
 {% for section in sections %}{{ render_section(section, 0) }}{% endfor %}
