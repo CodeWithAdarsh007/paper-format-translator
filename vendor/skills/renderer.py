@@ -296,6 +296,76 @@ def graphic_path(s):
     return p
 
 
+def placement(value, default="!htbp"):
+    """A float placement argument, limited to the characters TeX accepts.
+
+    The templates used to run placement through ``citekey`` (a \\ref-argument sanitiser) or ignore
+    it; only this whitelist keeps ``!htbp``/``H`` intact and turns anything else into the default.
+    """
+    kept = _PLACEMENT_BAD_RE.sub("", str(value or ""))
+    return kept or default
+
+
+def anchor_floats(sections, figures, tables):
+    """Emit each labelled float just after the first block that references it.
+
+    ``render_floats`` used to place every figure and table of the paper in one block after the last
+    section, so Figure 1 of 1706.03762 - referenced on page 2 - was typeset on page 5. The SIR keeps
+    an inline ``figure_ref``/``table_ref`` block with the target label wherever the body cites a
+    float, so the reference order is available without touching the schema: this only moves where a
+    float is emitted. Nothing is added, dropped or reworded.
+
+    Floats of a kind are still *emitted* in declaration order, because that is what numbers them:
+    anchoring each one at its own first reference renumbered 1706.03762's tables (its Table III is
+    cited in the body before its Table I, so a naive anchor made "Variations…" Table I). Each float
+    goes at max(its first reference, the position the previous float of that kind took), and a float
+    with no in-text reference - plus every float declared after it - stays in the pending tail.
+    """
+    anchor_at = {}                                # label -> flat block index of first citation
+    for n, block in enumerate(_flat_blocks(sections)):
+        if isinstance(block, dict) and block.get("type") in ("figure_ref", "table_ref"):
+            anchor_at.setdefault(str(block.get("label") or ""), n)
+
+    def plan(items):
+        anchored, pending, last, tail_only = [], [], -1, False
+        for item in items or []:
+            label = str(item.get("label") or "") if isinstance(item, dict) else ""
+            pos = None if tail_only or not label else anchor_at.get(label)
+            if pos is None:
+                tail_only = True
+                pending.append(item)
+                continue
+            last = max(pos, last)
+            anchored.append((last, item))
+        return anchored, pending
+
+    figure_plan, pending_figures = plan(figures)
+    table_plan, pending_tables = plan(tables)
+    insert_at = {}
+    for kind, plan_items in (("figure", figure_plan), ("table", table_plan)):
+        for pos, item in plan_items:
+            insert_at.setdefault(pos, []).append({"type": "float", "kind": kind, "float": item,
+                                                  "_sep": "\n"})
+    out, n = [], -1
+    for section in sections or []:
+        section = dict(section)
+        blocks = []
+        for block in section.get("blocks") or []:
+            n += 1
+            blocks.append(block)
+            blocks.extend(insert_at.get(n, []))
+        section["blocks"] = blocks
+        out.append(section)
+    return out, pending_figures, pending_tables
+
+
+def _flat_blocks(sections):
+    """Every block of every section, in document order: the coordinate ``anchor_floats`` uses."""
+    for section in sections or []:
+        for block in section.get("blocks") or []:
+            yield block
+
+
 def insert_label(latex, label):
     """Put a \\label back inside an equation environment whose SIR copy had it stripped."""
     if not latex:
@@ -314,6 +384,10 @@ DEFAULT_TEMPLATES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
 _MACRO_DEF_NAME_RE = re.compile(
     r"^\\(?:providecommand|DeclareMathOperator)\s*\{\s*\\([A-Za-z]+)\s*\}"
     r"|^\\def\s*\\([A-Za-z]+)")
+# Colours are referenced by bare name (\cellcolor{ColorHigh}), so the \name test in select_macros
+# can never see them used; they are matched and kept separately.
+_DEFINECOLOR_RE = re.compile(r"^\\definecolor\s*\{\s*([^{}]+?)\s*\}")
+_PLACEMENT_BAD_RE = re.compile(r"[^!hptbHm]")
 _WALK_SKIP_KEYS = {"macros", "source", "extracted_at", "schema_version", "paper_id",
                    "source_format", "parse_warnings"}
 
@@ -400,22 +474,32 @@ def select_macros(definitions, sir):
     Unused definitions are not just noise: a macro that collides with a package command, or that
     needs a package the template does not load, would break a paper that otherwise compiles. The
     closure is transitive because ``\\norm`` may be defined in terms of ``\\set``.
+
+    ``\\definecolor`` lines skip the reachability test and are always emitted: a colour is
+    referenced by bare name (``\\cellcolor{ColorHigh}``), which the backslash-matching below can
+    never see, and an unused colour definition cannot break anything. Dropping them cost
+    2402.12424 108 errors per format ("Undefined color 'ColorHigh'").
     """
-    by_name = {}
+    by_name, colours = {}, {}
     for d in definitions or []:
         if not isinstance(d, str):
             continue
-        m = _MACRO_DEF_NAME_RE.search(d.strip())
+        d = d.strip()
+        cm = _DEFINECOLOR_RE.match(d)
+        if cm:
+            colours.setdefault(cm.group(1), d)
+            continue
+        m = _MACRO_DEF_NAME_RE.search(d)
         name = (m.group(1) or m.group(2)) if m else None
         if name:
-            by_name.setdefault(name, d.strip())
-    if not by_name:
-        return []
+            by_name.setdefault(name, d)
     blob = "\n".join(_sir_strings(sir))
 
     def mentions(name, text):
         return re.search("\\\\" + re.escape(name) + r"(?![A-Za-z])", text) is not None
 
+    if not by_name:
+        return list(colours.values())
     used, frontier = set(), [n for n in by_name if mentions(n, blob)]
     while frontier:
         name = frontier.pop()
@@ -425,7 +509,7 @@ def select_macros(definitions, sir):
         for other in by_name:
             if other not in used and mentions(other, by_name[name]):
                 frontier.append(other)
-    return [d for n, d in by_name.items() if n in used]
+    return [d for n, d in by_name.items() if n in used] + list(colours.values())
 
 
 def _env(templates_dir=None):
@@ -438,6 +522,7 @@ def _env(templates_dir=None):
     ed.filters["texu"] = protect_tex_unicode
     ed.filters["citekey"] = citekey
     ed.filters["graphpath"] = graphic_path
+    ed.filters["placement"] = placement
     ed.globals["insert_label"] = insert_label
     ed.globals["render_with_math"] = render_with_math
     return ed
@@ -470,6 +555,8 @@ def build_context(sir, fmt, warnings):
     tables, tikz_tables = sanitize_tables(sir.get("tables") or [])
     if tikz_tables:
         warnings.append(f"{tikz_tables} table(s) were TikZ/PGF diagrams -> placeholder body")
+    sections, pending_figures, pending_tables = anchor_floats(
+        annotate_block_separators(sections), sir.get("figures") or [], tables)
     broken = unbalanced_spans(sir)
     if broken:
         warnings.append(f"{broken} math span(s) with unbalanced $ re-split into text + math")
@@ -483,9 +570,11 @@ def build_context(sir, fmt, warnings):
         "metadata": {"title": title, "authors": authors, "abstract": abstract,
                      "abstract_math_spans": md.get("abstract_math_spans") or [],
                      "keywords": md.get("keywords") or []},
-        "sections": annotate_block_separators(sections),
+        "sections": sections,
         "figures": sir.get("figures") or [],
         "tables": tables,
+        "pending_figures": pending_figures,
+        "pending_tables": pending_tables,
         "equations": sir.get("equations") or [],
         "references": refs,
         "macros": select_macros(sir.get("macros") or [], sir),

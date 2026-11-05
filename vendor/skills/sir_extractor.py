@@ -71,8 +71,14 @@ FIGURE_ENVS = {"figure", "figure*", "wrapfigure", "float", "sidewaysfigure"}
 # was recursed into as prose ("lrr Model EN-DE FLOPs ..." as one paragraph) and a longtable was
 # stored without its \begin, printing its cells as text.
 TABULAR_ENVS = {"tabular", "tabular*", "tabularx", "tabulary", "tabu", "supertabular",
-                "longtable"}
+                "longtable", "tblr", "longtblr"}
 TABLE_ENVS = {"table", "table*", "sidewaystable"} | TABULAR_ENVS
+# Float bodies that are not a tabular but must still be kept whole: a wrapper that changes how the
+# tabular is laid out or annotated. Slicing to the inner tabular would drop the wrapper (and, for
+# threeparttable, the table notes) and would leave the wide tabular unscaled.
+TABLE_WRAPPER_ENVS = {"threeparttable", "adjustbox", "subtable", "minipage", "varwidth",
+                      "boxedminipage", "floatbox"}
+
 SKIP_ENVS = {"abstract", "thebibliography"}          # consumed by metadata / references
 # Drawing instructions, not prose. Recursing into them turns diagram labels ("π_PC") into Unicode
 # text outside math; the templates do not load tikz, so the diagram cannot be reproduced anyway.
@@ -343,6 +349,13 @@ def text_with_math(raw: str, warnings: list = None):
 _MACRO_CTOR_RE = re.compile(
     r"\\(newcommand|renewcommand|providecommand|DeclareRobustCommand|DeclareMathOperator)\*?")
 _DEF_RE = re.compile(r"\\def\s*\\([A-Za-z]+)(?![A-Za-z])")
+# A colour is referenced by bare name (\cellcolor{ColorHigh}), never with a backslash, so it is not
+# a "macro" in the _MACRO_CTOR_RE sense and was silently dropped: 2402.12424 defined ColorLow/Mid/
+# High in its preamble and its own \applyGradient macros then failed with
+# "! Package xcolor Error: Undefined color 'ColorHigh'" — 108 errors in each format.
+_DEFINECOLOR_RE = re.compile(r"\\definecolor\s*\{\s*([^{}]+?)\s*\}\s*"
+                             r"\{\s*([^{}]+?)\s*\}\s*\{\s*([^{}]*?)\s*\}")
+
 
 
 def _skip_ws(text: str, i: int) -> int:
@@ -411,7 +424,16 @@ def collect_macro_definitions(preamble: str):
             continue
         _body, after = match_braces(text, k)
         defs[key] = text[m.start():after]
-    return [defs[k] for k in defs]
+    out = [defs[k] for k in defs]
+    # Colours are emitted verbatim (no \providecommand rewrite) and keep their own namespace, so a
+    # paper colour called "red" overrides xcolor's shorthand exactly as the source did.
+    colours = {}
+    for m in _DEFINECOLOR_RE.finditer(text):
+        name = m.group(1)
+        if name in colours or "@" in name:
+            continue
+        colours[name] = f"\\definecolor{{{name}}}{{{m.group(2)}}}{{{m.group(3)}}}"
+    return out + list(colours.values())
 
 
 def clean_heading(s: str) -> str:
@@ -911,8 +933,42 @@ def extract_metadata(preamble: str, body: str, warnings: list):
 
 # ------------------------------------------------------------------ floats, math, lists
 
+# The float's own placement argument. ``scan_blocks`` hands float parsers the text *after*
+# \begin{figure} / \begin{table}, so the bracket is the first token of that text; ``(?<!\\)`` keeps
+# a display-math \[ from being read as one.
+_PLACEMENT_RE = re.compile(r"^\s*(?<!\\)\[([^\]]*)\]")
+
+
+def split_placement(inner: str):
+    """``('[t]', body_without_it)`` for a float environment body.
+
+    Leaving the bracket in the body put a literal ``[t]`` in the rendered document, and it is also
+    the only place the source's own placement hint can be read from.
+    """
+    m = _PLACEMENT_RE.match(inner or "")
+    if not m:
+        return None, inner or ""
+    return (m.group(1).strip() or None), inner[m.end():]
+
+
+def _drop_caption_label(body: str) -> str:
+    """Remove the float's own ``\\caption``/``\\label`` from a verbatim body: the renderer re-emits
+    both from ``caption``/``label``, and keeping the source copies printed every caption twice."""
+    out, i = [], 0
+    while i < len(body):
+        m = re.compile(r"\\(caption|label)\s*(?:\[[^\]]*\])?\s*\{").search(body, i)
+        if not m:
+            out.append(body[i:])
+            break
+        text, after = match_braces(body, m.end() - 1)
+        out.append(body[i:m.start()])
+        i = after
+    return "".join(out)
+
+
 def parse_figure(inner: str, warnings: list):
     fig = {"label": None, "caption": None, "path": None, "placement": None}
+    fig["placement"], inner = split_placement(inner)
     cap = re.search(r"\\caption\s*(?:\[[^\]]*\])?\s*\{", inner)
     if cap:
         text, _ = match_braces(inner, cap.end() - 1)
@@ -936,14 +992,15 @@ def parse_figure(inner: str, warnings: list):
         lab = _LABEL_RE.search(inner)
         if lab:
             fig["label"] = lab.group(1).strip()
-    pl = re.search(r"\\begin\s*\{figure\}?\s*\[([^\]]*)\]", inner)
-    if pl:
-        fig["placement"] = pl.group(1).strip() or None
     return fig
 
 
 def parse_table(inner: str, warnings: list, env: str = None, whole: str = None):
-    tab = {"label": None, "caption": None, "latex": ""}
+    tab = {"label": None, "caption": None, "latex": "", "placement": None}
+    # Only a float carries a placement: for a bare tabular the leading bracket is its column
+    # alignment argument (\begin{longtable}[c]{ll}), which belongs inside the body.
+    if env not in TABULAR_ENVS:
+        tab["placement"], inner = split_placement(inner)
     cap = re.search(r"\\caption\s*(?:\[[^\]]*\])?\s*\{", inner)
     if cap:
         text, _ = match_braces(inner, cap.end() - 1)
@@ -959,16 +1016,26 @@ def parse_table(inner: str, warnings: list, env: str = None, whole: str = None):
         tab["latex"] = (whole if whole is not None else inner).strip()
     else:
         body = re.search(r"\\begin\s*\{((?:tabular|tabularx|array|nicematrix|bmatrix|IEEEeqnarray"
-                         r"|longtable|tabulary|tabu|supertabular)\*?)\}\s*(?:\[[^\]]*\])?\s*\{",
-                         inner)
-        if body:
+                         r"|longtable|tabulary|tabu|supertabular|tblr|longtblr)\*?)\}"
+                         r"\s*(?:\[[^\]]*\])?\s*\{", inner)
+        wrapper = re.search(r"\\begin\s*\{(" + "|".join(sorted(TABLE_WRAPPER_ENVS)) + r")\*?\}",
+                            inner) or re.search(r"\\resizebox\s*\{", inner)
+        if wrapper:
+            # The wrapper is part of the table: a threeparttable's tablenotes is content, and a
+            # resizebox/adjustbox is what keeps a wide tabular inside the column. Slicing to the
+            # tabular alone dropped both. \caption and \label are removed because the template
+            # re-emits them from caption/label, which used to print every caption twice.
+            tab["latex"] = _drop_caption_label(inner).strip()
+        elif body:
             envname = re.match(r"\\begin\s*\{([^}]*)\}", body.group(0)).group(1)
             end, _ = find_env_end(inner, body.end(), envname)
             tab["latex"] = inner[body.start(): end + len(envname) + 6].strip() if end > 0 \
                 else inner[body.start():].strip()
         else:
-            tab["latex"] = inner.strip()
-            if inner.strip():
+            tab["latex"] = _drop_caption_label(inner).strip()
+            # A table float holding an image is what an image-based-table paper looks like, not a
+            # parse failure, so it is not warned about.
+            if tab["latex"] and "\\includegraphics" not in inner and "\\pgfimage" not in inner:
                 warnings.append("table without a tabular environment")
     if not tab["label"]:
         lab = _LABEL_RE.search(inner)
@@ -1030,16 +1097,44 @@ def find_env_close(text: str, start: int):
     return -1, len(text)
 
 
+def _unbrace(value: str) -> str:
+    """Drop a single pair of protecting braces around a whole bib value (``{Vaswani, A}`` -> the
+    list), leaving inner braces such as ``${\\alpha}$`` intact."""
+    v = (value or "").strip()
+    if v.startswith("{") and v.endswith("}") and v.count("{") == v.count("}"):
+        depth = 0
+        for i, ch in enumerate(v):
+            if ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0 and i != len(v) - 1:
+                    return v          # closes before the end: not one enclosing pair
+        return v[1:-1].strip()
+    return v
+
+
 def _bib_fields_from_regex(text: str, warnings: list):
-    """Fallback .bib reader when bibtexparser is unavailable or chokes on a malformed entry."""
+    """Fallback .bib reader when bibtexparser is unavailable or chokes on a malformed entry.
+
+    One field per match, with balanced-brace depth allowed inside ``{...}``: the previous pattern
+    used a greedy ``(.*)`` across the whole entry, so a multi-field record came back as one string
+    of ``field = {…},`` noise (measured on 2402.12424/custom.bib: 53/53 entries wrong, some
+    degenerating to the ``[key]`` stub). A fallback that rewrites a bibliography is worse than none.
+    """
     out = []
     for m in re.finditer(r"@\s*(\w+)\s*\{\s*([^,\s]+)\s*,", text):
         etype, key = m.group(1).lower(), m.group(2)
         end, _ = find_env_close(text, m.end())
         block = text[m.end():end] if end > 0 else text[m.end():]
         fields = {}
-        for fm in re.finditer(r"(\w+)\s*=\s*[{\"](.*)[}\"]\s*,?\s*\n?", block, re.S):
-            fields[fm.group(1).lower()] = norm_ws(strip_comments(fm.group(2)))
+        for fm in re.finditer(r"([A-Za-z][A-Za-z0-9_-]*)\s*=\s*\{((?:[^{}{}]|\{[^{}]*\})*)\}",
+                              block):
+            fields.setdefault(fm.group(1).lower(),
+                              norm_ws(strip_comments(_unbrace(fm.group(2)))))
+        for fm in re.finditer(r'([A-Za-z][A-Za-z0-9_-]*)\s*=\s*"([^"]*)"', block):
+            fields.setdefault(fm.group(1).lower(),
+                              norm_ws(strip_comments(_unbrace(fm.group(2)))))
         out.append((key, {"entry_type": etype, **fields}))
     return out
 

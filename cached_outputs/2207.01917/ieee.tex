@@ -14,6 +14,7 @@
 \usepackage{colortbl}
 \usepackage{bm}
 \usepackage{makecell}
+\usepackage{float}
 % Commands that preserved table/equation LaTeX uses but whose package a template may not load.
 % \providecommand is a no-op wherever the real package does define them (acmart loads natbib).
 \providecommand{\citep}[2][]{ \cite{ #2}}
@@ -38,6 +39,33 @@
 \ifdefined\rm\else\let\rm\rmfamily\fi
 \ifdefined\sf\else\let\sf\sffamily\fi
 \ifdefined\tt\else\let\tt\ttfamily\fi
+% \pgfmathparse lives in pgf (Debian: texlive-pictures), which none of the three classes loads.
+% A paper-local colour-gradient macro that calls it otherwise fails with one "Undefined control
+% sequence" per coloured cell (2402.12424: 108 errors per format). Reporting a flat lightness keeps
+% the cell's own value printed and the colour at its lightest - degraded cosmetics, not lost text.
+\providecommand{\pgfmathparse}[1]{\def\pgfmathresult{0}}
+% Logic/typography packages the source loaded but the class templates deliberately do not: loading
+% them when the image has them keeps their real behaviour, and the fallback keeps the document
+% compiling when it does not. \ifdefstring is etoolbox (2402.12424's \applyGradientb branched on it:
+% 20 undefined-cs errors), \usym is utfsym and prints a glyph by Unicode codepoint in a symbol font
+% (7 more, in the open/closed column of a results table). A "?" is shown rather than nothing, so a
+% substituted cell is visible instead of silently blank.
+% The spaces inside the braces below are load-bearing twice over: TeX ignores them, but a brace
+% followed by a percent or a hash would open a Jinja tag or comment and eat the macro body.
+\IfFileExists{etoolbox.sty}{\usepackage{etoolbox}}{\providecommand{\ifdefstring}[4]{ #3}\providecommand{\ifdefstrequal}[4]{ #3}}
+\providecommand{\usym}[1]{\textbf{?}}
+% Preserved table bodies keep their wrapper (see sir_extractor.TABLE_WRAPPER_ENVS), so the wrapper
+% has to exist here or the body it holds is lost: 2507.23194's tablenotes became
+% "Environment threeparttable undefined". Both are in texlive-latex-extra, which the image installs;
+% the fallback keeps the notes as plain text when it is not.
+\IfFileExists{threeparttable.sty}{\usepackage{threeparttable}}{\newenvironment{threeparttable}{}{}\newenvironment{tablenotes}[1][]{}}
+\providecommand{\tnote}[1]{ \textsuperscript{ #1}}
+\IfFileExists{adjustbox.sty}{\usepackage{adjustbox}}{\newenvironment{adjustbox}[1]{}}
+% A minipage side-by-side figure pair captions itself with \captionof (caption.sty) rather than
+% \caption, and keeping the wrapper (2210.03629) means keeping that call. Loading caption on a class
+% that already did is a no-op (probed: acmart + \usepackage{caption} compiles clean).
+\IfFileExists{caption.sty}{\usepackage{caption}}{}
+\ifcsname captionof\endcsname\else\providecommand{\captionof}[2]{ #1: #2}\fi
 
 \providecommand{\node}[1]{\ensuremath{n}_{#1}}
 \title{GLANCE: Global to Local Architecture-Neutral Concept-based Explanations}
@@ -93,6 +121,11 @@ observed context features to model the data-generating process as perceived by t
 
 Methodologically, we use a twin-surrogate model based on disentanglement, alignment, and generator blocks as overviewed in Figure
 \ref{fig:overview}
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{imgs/overview.png}
+\caption{Overview of the proposed framework, in which the feature extractor ($\Phi_f$) and the feature classifier ($\Phi_c$) are blocks of a trained, given classifier model ( $\Phi_C$). The feature disentanglement ($\Phi_d$), feature alignment ($\Phi_a$), and generator ($\Phi_g$) blocks are part of our proposed twin-surrogate model. The causal graph extraction and feature attribution blocks, together with the generator, provide our explanations. \label{fig:overview} }
+\end{figure}
 . The generator is implemented as an extension of styleGAN-v2
 \cite{karras2020analyzing}
 augmented to incorporate additional blocks for disentanglement and alignment.
@@ -314,6 +347,11 @@ Based on the above Definition
 
 and with the reference to framework DAG in Figure
 \ref{fig:framworkdag}
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=\linewidth]{imgs/frameworkdag.png}
+\caption{The flow of information in various blocks of our proposed framework from classifier features to explanations \label{fig:framworkdag} }
+\end{figure}
 we show that the bounded mutual information between $\mathcal{E}'$ and $\mathcal{E}xps$ is the same as the information flow from the classifier to the generated explanations. Due to this, we consider the normalised mutual information as the `faithfulness' metric, given by $\Big( faithfulness index = \frac{\mathcal{I}(\mathcal{E}'; \mathcal{E}xps)}{\sqrt{\mathcal{H}(\mathcal{E}xps)\mathcal{H}(\mathcal{E}')}}\Big)$, where $\mathcal{H}(.)$ corresponds to entropy.
 
 (The proof and reasoning for this proposition are given in appendix
@@ -348,6 +386,16 @@ and
 
 . We report in Table
 \ref{table:explanationresults}
+\begin{table}[!htbp]
+\centering
+\caption{Quantitative comparison between multiple explanation methods with respect to faithfulness and stability properties (higher values indicate better performance). \label{table:explanationresults} }
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+\begin{tabular}[c]{@{}l@{}}Metrics $\downarrow$ | Methods $\rightarrow$\end{tabular} & LIME & DeepSHAP & DeepLIFT & GradCAM & Ours \\ \midrule
+\begin{tabular}[c]{@{}l@{}} \textit{Faithfullness Index}\end{tabular} &   0.22  &  0.67    &  0.92   &  0.22  &  \textbf{0.97}  \\
+\begin{tabular}[c]{@{}l@{}} \textit{Stability Index}\end{tabular}  &      -1.40 &  -0.07  &  -0.04  & -2.53  &  \textbf{-0.02} \\ \bottomrule
+\end{tabular}
+\end{table}
 the average faithfulness and
 
 stability indeces obtained for 1000 generated explanations .
@@ -464,6 +512,19 @@ We use the graph correctness index defined in
 
 to quantify the performance difference between all three methods; table
 \ref{table:discoveryresults}
+\begin{table}[!htbp]
+\centering
+\caption{Table describes quantitative comparison between causal multiple causal discovery methods on four different versions of Morpho-MNIST dataset as described in <ref> using graph correctnessIndex. \label{table:discoveryresults} }
+\begin{tabular}{@{}llll@{}}
+
+\toprule
+\begin{tabular}[c]{@{}l@{}}Datasets $\downarrow$ \textbackslash\\ Methods $\rightarrow$\end{tabular} & \begin{tabular}[c]{@{}l@{}}LinGAM \\ Based \cite{maeda2020rcd}\end{tabular} & \begin{tabular}[c]{@{}l@{}}GES \\ Based \cite{chickering2002optimal}\end{tabular} & Ours \\ \midrule
+Morpho-MNIST (TI)                                                                                &  0.84                                                                                &    0.66                                                                           &  \textbf{1.0}    \\
+Morpho-MNIST (IT)                                                                                &  0.66                                                                              &  0.66                                                                              &    \textbf{1.0}  \\
+Morpho-MNIST (TS)                                                                                & 0.82                                                                               &  0.66                                                                             &    \textbf{0.98}  \\
+Morpho-MNIST (TSWI)                                                                              &  0.58                                                                             & 0.42                                                                              &  \textbf{0.94}    \\ \bottomrule
+\end{tabular}
+\end{table}
 describes the results.
 \subsubsection{Explanation}
 As previously mentioned, In this study we compare our method against standard saliency based explanation methods, we consider LIME
@@ -492,74 +553,41 @@ We trained all our models on a system with GPU: Nvidia Telsa T4 16GB, CPU: Intel
 
 
 
-\begin{figure}[t]
-\centering
-\includegraphics[width=\linewidth]{imgs/overview.png}
-\caption{Overview of the proposed framework, in which the feature extractor ($\Phi_f$) and the feature classifier ($\Phi_c$) are blocks of a trained, given classifier model ( $\Phi_C$). The feature disentanglement ($\Phi_d$), feature alignment ($\Phi_a$), and generator ($\Phi_g$) blocks are part of our proposed twin-surrogate model. The causal graph extraction and feature attribution blocks, together with the generator, provide our explanations. \label{fig:overview} }
-\end{figure}
-\begin{figure}[t]
-\centering
-\includegraphics[width=\linewidth]{imgs/frameworkdag.png}
-\caption{The flow of information in various blocks of our proposed framework from classifier features to explanations \label{fig:framworkdag} }
-\end{figure}
-\begin{figure}[t]
+\begin{figure}[!htbp]
 \centering
 \includegraphics[width=\linewidth]{imgs/gtigraph.png}
 \caption{(Quantitative and qualitative) Comparison of causal discovery methods . \label{fig:causaldiscoveries} }
 \end{figure}
-\begin{figure}[t]
+\begin{figure}[!htbp]
 \centering
 \includegraphics[width=\linewidth]{imgs/mnistExpComp.png}
 \caption{Demonstration of the effectiveness of GLANCE explanations on the Morpho-MNIST-IT dataset (the global explanation graph is in Figure <ref>(d)). (a) Demonstrates explanations obtained from four standard methods. (b) GLANCE explanations: the first row indicates the original image and the image perceived by the classifier ; the second row indicates aligned features' importance scores and effect on confidence scores with original, perceived, and intervened (w.r.t the thickness attribute) images . (c) The first column shows an intervention on the perceived image and the second column corresponds to the effect of an intervention (difference between perceived and intervened images). \label{fig:mmnistresults} }
 \end{figure}
-\begin{figure}[t]
+\begin{figure}[!htbp]
 \centering
 \includegraphics[width=\linewidth]{imgs/ffhqdag.png}
 \caption{(a) DAG generated by our proposed method. (b) GLANCE explanations: the first row indicates the original image and the image perceived by the classifier ; the second row indicates feature importance scores and effect on confidence scores with original, perceived, and intervened ( w.r.t the smile attribute) image . (c) The first column demonstrates an intervention on the perceived image and the second column corresponds to the effect of an intervention. \label{fig:ffhqresults} }
 \end{figure}
-\begin{figure}[t]
+\begin{figure}[!htbp]
 \centering
 \includegraphics[width=\linewidth]{imgs/tix.png}
 \caption{Causal discoveries on various different data-generating processes. Top row describes the causal relationships followed in data-generating process, second row shows the discoveries made by our proposed method, third row shows the cluster formed by a feature disentanglement block to describe an alignment effect, fourth row describes the effectiveness of our alignment block in aligning model latent features to observed context features. In (a) thickness causes intensity and both thickness and intensity causally affects image, the same behaviour can be observed in generated causal graph with graph correctnessIndex=1.0. In (b) intensity causes thickness, we selected this example to examine algorithms behaviour in the case of a reversed causal link(w.r.t (a)), and the correct behaviour is observed in the generated graph with correctnessIndex=1.0. In (c) thickness causes slant, again the generated graph shows similar behaviour with correctnessIndex=0.98. In (d) we tried adding multiple causal variables with higher relationship depth, and our proposed method was able to reconstruct these relationships with correctnessIndex=0.94. \label{fig:synthDataExp} }
 \end{figure}
-\begin{figure}[t]
+\begin{figure}[!htbp]
 \centering
 \includegraphics[width=\linewidth]{imgs/test.png}
 \caption{Following figure demonstrates the effectiveness of our proposed explanations and other standard existing explanation frameworks \label{fig:morhpoMNISTresults} }
 \end{figure}
-\begin{figure}[t]
+\begin{figure}[!htbp]
 \centering
 \includegraphics[width=\linewidth]{imgs/ffhq-gt.png}
 \caption{Assumed true causal structure between attributes and image. \label{fig:ffhqgraph-gt} }
 \end{figure}
-\begin{figure}[t]
+\begin{figure}[!htbp]
 \centering
 \includegraphics[width=\linewidth]{imgs/ffhqtest.png}
 \caption{First row shows an original image, second row describes reconstructed images, while third shows the effect of intervention, followed by difference between interventional and perceived images, and feature importance as perceived by classifier. Last row corresponds to feature attribution explanations on extracted features in latent space \label{fig:ffhqexplanations} }
 \end{figure}
-\begin{table}[t]
-\centering
-\caption{Quantitative comparison between multiple explanation methods with respect to faithfulness and stability properties (higher values indicate better performance). \label{table:explanationresults} }
-\begin{tabular}{@{}lccccc@{}}
-\toprule
-\begin{tabular}[c]{@{}l@{}}Metrics $\downarrow$ | Methods $\rightarrow$\end{tabular} & LIME & DeepSHAP & DeepLIFT & GradCAM & Ours \\ \midrule
-\begin{tabular}[c]{@{}l@{}} \textit{Faithfullness Index}\end{tabular} &   0.22  &  0.67    &  0.92   &  0.22  &  \textbf{0.97}  \\
-\begin{tabular}[c]{@{}l@{}} \textit{Stability Index}\end{tabular}  &      -1.40 &  -0.07  &  -0.04  & -2.53  &  \textbf{-0.02} \\ \bottomrule
-\end{tabular}
-\end{table}
-\begin{table}[t]
-\centering
-\caption{Table describes quantitative comparison between causal multiple causal discovery methods on four different versions of Morpho-MNIST dataset as described in <ref> using graph correctnessIndex. \label{table:discoveryresults} }
-\begin{tabular}{@{}llll@{}}
-
-\toprule
-\begin{tabular}[c]{@{}l@{}}Datasets $\downarrow$ \textbackslash\\ Methods $\rightarrow$\end{tabular} & \begin{tabular}[c]{@{}l@{}}LinGAM \\ Based \cite{maeda2020rcd}\end{tabular} & \begin{tabular}[c]{@{}l@{}}GES \\ Based \cite{chickering2002optimal}\end{tabular} & Ours \\ \midrule
-Morpho-MNIST (TI)                                                                                &  0.84                                                                                &    0.66                                                                           &  \textbf{1.0}    \\
-Morpho-MNIST (IT)                                                                                &  0.66                                                                              &  0.66                                                                              &    \textbf{1.0}  \\
-Morpho-MNIST (TS)                                                                                & 0.82                                                                               &  0.66                                                                             &    \textbf{0.98}  \\
-Morpho-MNIST (TSWI)                                                                              &  0.58                                                                             & 0.42                                                                              &  \textbf{0.94}    \\ \bottomrule
-\end{tabular}
-\end{table}
 
 \bibliographystyle{IEEEtran}
 \begin{thebibliography}{99}

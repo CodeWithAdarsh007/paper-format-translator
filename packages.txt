@@ -4,3 +4,7 @@ texlive-latex-extra
 texlive-fonts-recommended
 texlive-publishers
 texlive-science
+# pgf.sty (\pgfmathparse) and utfsym.sty (\usym) both live only here, and no class template loads
+# them: 2402.12424's colour-gradient macros and its tick/cross column produced 27 "Undefined control
+# sequence" errors without them. 15 MB download / 75 MB installed.
+texlive-pictures

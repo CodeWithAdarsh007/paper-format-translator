@@ -14,6 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         texlive-fonts-recommended \
         texlive-publishers \
         texlive-science \
+        texlive-pictures \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

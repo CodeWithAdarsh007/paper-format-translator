@@ -6,6 +6,12 @@ pylatexenc>=2.10
 pymupdf>=1.24
 requests>=2.31
 huggingface_hub>=0.23
+# Papers whose bibliography is a .bib file (ACL/IEEE style, i.e. most of arXiv) are parsed with
+# bibtexparser; the code path is bibtexparser.parse_string, which exists only in 2.x. Without it the
+# deployed app fell back to the regex reader and rewrote every entry of 2402.12424's 53-entry
+# bibliography into field noise - ~7 MB of wheels, and the only way to know it is installed is to
+# list it here, because this dev host already has it.
+bibtexparser>=2.0,<3
 
 # Not installed by the Space: the ReferenceExtractor (torch) is a research
 # artefact, not part of the serving path. sir_extractor reads references from

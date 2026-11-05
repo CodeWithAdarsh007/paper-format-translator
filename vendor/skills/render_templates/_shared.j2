@@ -40,6 +40,33 @@
 \ifdefined\rm\else\let\rm\rmfamily\fi
 \ifdefined\sf\else\let\sf\sffamily\fi
 \ifdefined\tt\else\let\tt\ttfamily\fi
+% \pgfmathparse lives in pgf (Debian: texlive-pictures), which none of the three classes loads.
+% A paper-local colour-gradient macro that calls it otherwise fails with one "Undefined control
+% sequence" per coloured cell (2402.12424: 108 errors per format). Reporting a flat lightness keeps
+% the cell's own value printed and the colour at its lightest - degraded cosmetics, not lost text.
+\providecommand{\pgfmathparse}[1]{\def\pgfmathresult{0}}
+% Logic/typography packages the source loaded but the class templates deliberately do not: loading
+% them when the image has them keeps their real behaviour, and the fallback keeps the document
+% compiling when it does not. \ifdefstring is etoolbox (2402.12424's \applyGradientb branched on it:
+% 20 undefined-cs errors), \usym is utfsym and prints a glyph by Unicode codepoint in a symbol font
+% (7 more, in the open/closed column of a results table). A "?" is shown rather than nothing, so a
+% substituted cell is visible instead of silently blank.
+% The spaces inside the braces below are load-bearing twice over: TeX ignores them, but a brace
+% followed by a percent or a hash would open a Jinja tag or comment and eat the macro body.
+\IfFileExists{etoolbox.sty}{\usepackage{etoolbox}}{\providecommand{\ifdefstring}[4]{ #3}\providecommand{\ifdefstrequal}[4]{ #3}}
+\providecommand{\usym}[1]{\textbf{?}}
+% Preserved table bodies keep their wrapper (see sir_extractor.TABLE_WRAPPER_ENVS), so the wrapper
+% has to exist here or the body it holds is lost: 2507.23194's tablenotes became
+% "Environment threeparttable undefined". Both are in texlive-latex-extra, which the image installs;
+% the fallback keeps the notes as plain text when it is not.
+\IfFileExists{threeparttable.sty}{\usepackage{threeparttable}}{\newenvironment{threeparttable}{}{}\newenvironment{tablenotes}[1][]{}}
+\providecommand{\tnote}[1]{ \textsuperscript{ #1}}
+\IfFileExists{adjustbox.sty}{\usepackage{adjustbox}}{\newenvironment{adjustbox}[1]{}}
+% A minipage side-by-side figure pair captions itself with \captionof (caption.sty) rather than
+% \caption, and keeping the wrapper (2210.03629) means keeping that call. Loading caption on a class
+% that already did is a no-op (probed: acmart + \usepackage{caption} compiles clean).
+\IfFileExists{caption.sty}{\usepackage{caption}}{}
+\ifcsname captionof\endcsname\else\providecommand{\captionof}[2]{ #1: #2}\fi
 {%- endmacro %}
 
 {% macro render_macros(macros) -%}
@@ -125,6 +152,10 @@
 \ref{ {{- block.get("label") | citekey -}} }
 {%- elif t == "table_ref" -%}
 \ref{ {{- block.get("label") | citekey -}} }
+{%- elif t == "float" -%}
+{%- if block.get("kind") == "table" -%}{{ render_table(block["float"]) }}
+{%- else -%}{{ render_figure(block["float"]) }}
+{%- endif -%}
 {%- elif t == "citation" -%}
 \cite{
 {%- for k in block.get("keys") or [] -%}
@@ -155,7 +186,7 @@
 {%- endmacro %}
 
 {% macro render_figure(fig) -%}
-\begin{figure}[ {{- fig.get("placement") | default("t", true) | citekey -}} ]
+\begin{figure}[ {{- fig.get("placement") | placement -}} ]
 \centering
 {%- if fig.get("path") %}
 \includegraphics[width=\linewidth]{ {{- fig["path"] | graphpath -}} }
@@ -167,7 +198,7 @@
 {%- endmacro %}
 
 {% macro render_table(tab) -%}
-\begin{table}[t]
+\begin{table}[ {{- tab.get("placement") | placement -}} ]
 \centering
 \caption{ {{- render_with_math(tab.get("caption") or "", tab.get("math_spans") or []) -}}
 {%- if tab.get("label") %} \label{ {{- tab["label"] | citekey -}} }{% endif %} }
@@ -193,10 +224,11 @@
 {%- endmacro %}
 
 {% macro render_floats(figures, tables) -%}
-{#- Floats are emitted as one block, after the body. TeX keeps at most ~18 pending floats; past
-    that it reports "Too many unprocessed floats", the output routine retries without shipping a
-    page and the job dies on 100 dead cycles (1709.08492: 73 figures + 6 tables). Flushing every
-    20 keeps the pending queue under the limit for any paper that has more floats than pages. -#}
+{#- Only the floats that nothing in the body reference land here: renderer.anchor_floats() emits a
+    labelled float right after the first block that cites it, so a figure sits where its own section
+    discusses it instead of in a trailing pile (1706.03762's Figure 1: referenced page 2, was
+    typeset page 5). TeX still keeps at most ~18 pending floats, so the flush every 20 stays for
+    whatever is left (1709.08492: 73 figures + 6 tables). -#}
 {%- for f in figures or [] %}
 {{ render_figure(f) }}
 {%- if loop.index % 20 == 0 %}

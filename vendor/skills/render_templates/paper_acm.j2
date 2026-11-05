@@ -18,6 +18,15 @@
 \usepackage{colortbl}
 \usepackage{bm}
 \usepackage{makecell}
+\usepackage{float}
+{#- acmart turns on microtype's glyph expansion before it checks for its own fonts, and it only
+    loads the T1/Libertine set when libertine.sty, zi4.sty and newtxmath.sty all exist. On an image
+    without them (Streamlit's, since texlive-fonts-extra was dropped in Session 11B) the document
+    stays in the non-scalable fallback fonts and pdftex aborts every ACM build with
+    "! pdfTeX error (font expansion): auto expansion is only possible with scalable fonts".
+    Disabling expansion when the fonts are absent loses a typographic refinement, not the PDF. -#}
+\IfFileExists{libertine.sty}{}{\AtBeginDocument{\ifcsname microtypesetup\endcsname
+  \microtypesetup{expansion=false}\fi}}
 {{ render_compat() }}
 {{ render_macros(macros) }}
 {{ authors_acm(metadata.authors) }}
@@ -35,7 +44,8 @@
 
 {% for section in sections %}{{ render_section(section, 0) }}{% endfor %}
 
-{{ render_floats(figures, tables) }}
+{{ render_floats(pending_figures if pending_figures is defined else figures,
+                 pending_tables if pending_tables is defined else tables) }}
 
 \bibliographystyle{ACM-Reference-Format}
 {{ render_references(references) }}

@@ -23,6 +23,7 @@
 \usepackage{colortbl}
 \usepackage{bm}
 \usepackage{makecell}
+\usepackage{float}
 {{ render_compat() }}
 {{ render_macros(macros) }}
 {{ render_title(metadata.title) }}
@@ -39,7 +40,8 @@
 {% endif %}
 {% for section in sections %}{{ render_section(section, 0) }}{% endfor %}
 
-{{ render_floats(figures, tables) }}
+{{ render_floats(pending_figures if pending_figures is defined else figures,
+                 pending_tables if pending_tables is defined else tables) }}
 
 \bibliographystyle{splncs04}
 {{ render_references(references) }}
