@@ -6,10 +6,9 @@
     environment, so it is already invisible to the paragraph scan and stays in the body, where llncs
     expects it after the abstract.
 -#}
-{% from "_shared.j2" import render_title, render_macros, render_compat, authors_llncs, render_section,
-        render_floats, render_references with context %}
+{% from "_shared.j2" import render_title, render_macros, render_compat, render_float_support,
+        authors_llncs, render_section, render_floats, render_references with context %}
 \documentclass{llncs}
-\usepackage{graphicx}
 \usepackage{amsmath}
 \usepackage{amssymb}
 \usepackage{amsfonts}
@@ -23,7 +22,7 @@
 \usepackage{colortbl}
 \usepackage{bm}
 \usepackage{makecell}
-\usepackage{float}
+{{ render_float_support() }}
 {{ render_compat() }}
 {{ render_macros(macros) }}
 {{ render_title(metadata.title) }}
@@ -42,6 +41,8 @@
 
 {{ render_floats(pending_figures if pending_figures is defined else figures,
                  pending_tables if pending_tables is defined else tables) }}
+% Nothing may be typeset after the references start: this flushes every float still queued.
+\FloatBarrier
 
 \bibliographystyle{splncs04}
 {{ render_references(references) }}

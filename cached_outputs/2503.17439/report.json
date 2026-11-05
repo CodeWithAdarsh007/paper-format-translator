@@ -20,14 +20,14 @@
     "lncs": "clean"
   },
   "pdf_bytes": {
-    "ieee": 1063128,
-    "acm": 1489837,
-    "lncs": 1148418
+    "ieee": 1065636,
+    "acm": 1491933,
+    "lncs": 1155218
   },
   "pages": {
-    "ieee": 13,
+    "ieee": 14,
     "acm": 13,
-    "lncs": 30
+    "lncs": 34
   },
   "error_count": {
     "ieee": 0,
@@ -84,5 +84,5 @@
       "remapped": {}
     }
   },
-  "elapsed_s": 20.2
+  "elapsed_s": 15.7
 }

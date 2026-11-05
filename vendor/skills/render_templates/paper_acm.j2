@@ -5,8 +5,8 @@
     as a phantom lead-in section. \title, \begin{abstract} and \keywords stay before \maketitle, which
     is acmart's hard ordering rule; all three are already invisible to the paragraph scan.
 -#}
-{% from "_shared.j2" import render_title, render_macros, render_compat, authors_acm, render_section,
-        render_floats, render_references with context %}
+{% from "_shared.j2" import render_title, render_macros, render_compat, render_float_support,
+        authors_acm, render_section, render_floats, render_references with context %}
 \documentclass[sigconf]{acmart}
 {#- acmart already loads graphicx, amsmath, amssymb and xcolor, so only the table packages it does
     not provide are added here. -#}
@@ -18,7 +18,7 @@
 \usepackage{colortbl}
 \usepackage{bm}
 \usepackage{makecell}
-\usepackage{float}
+{{ render_float_support() }}
 {#- acmart turns on microtype's glyph expansion before it checks for its own fonts, and it only
     loads the T1/Libertine set when libertine.sty, zi4.sty and newtxmath.sty all exist. On an image
     without them (Streamlit's, since texlive-fonts-extra was dropped in Session 11B) the document
@@ -46,6 +46,8 @@
 
 {{ render_floats(pending_figures if pending_figures is defined else figures,
                  pending_tables if pending_tables is defined else tables) }}
+% Nothing may be typeset after the references start: this flushes every float still queued.
+\FloatBarrier
 
 \bibliographystyle{ACM-Reference-Format}
 {{ render_references(references) }}

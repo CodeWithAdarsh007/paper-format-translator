@@ -1,6 +1,5 @@
 
 \documentclass{llncs}
-\usepackage{graphicx}
 \usepackage{amsmath}
 \usepackage{amssymb}
 \usepackage{amsfonts}
@@ -14,7 +13,41 @@
 \usepackage{colortbl}
 \usepackage{bm}
 \usepackage{makecell}
+% ------------------------------------------------------------------ float placement (Session 13)
+% Every float the renderer emits is pinned with the [H] option, so it is typeset exactly where it
+% stands. float.sty is what defines H. Without it TeX treats a float as movable, which is how
+% 2005.14165's Table II was typeset on top of its Table I.
+\usepackage{graphicx}
 \usepackage{float}
+% placeins supplies \FloatBarrier, used once per document immediately before the reference list:
+% that is what stops a float being typeset between two \bibitem entries. The [section] option is
+% deliberately NOT requested - it patches \section, and acmart refuses that with
+% "An attempt to redefine \section detected". It would be redundant anyway: every float here is
+% [H], so TeX is never holding one over a section boundary in the first place.
+\IfFileExists{placeins.sty}{\usepackage{placeins}}{\providecommand{\FloatBarrier}{\clearpage}}
+% The tallest figure a page can hold. A float has no page-break inside it, so an uncapped figure
+% that scaled taller than the measure simply ran off the bottom of the page - the "some images are
+% cut down" report. totalheight (not height) only binds when the width-driven scale would overflow,
+% so a figure that already fits is untouched.
+\newcommand{\PFTFigMaxHeight}{0.82\textheight}
+% A wide table is the other half of the "overlapping" report: GPT-3's eight-column Table I is
+% typeset into a two-column IEEEtran page, and with no constraint its last column ran over the
+% facing column. \PFTTableFit shrinks a table to the measure when it is too wide and leaves it
+% untouched when it is not (adjustbox's max width never upscales). The two-step definition is
+% deliberate: a parameter token inside another macro's argument (here, a #1 within the branches of
+% \IfFileExists) is re-scanned when that argument becomes a definition and LaTeX aborts with
+% "Illegal parameter number in definition of \reserved@a", so \PFTTableFit is defined at top level
+% after the load has been tried.
+\IfFileExists{adjustbox.sty}{\usepackage{adjustbox}}{}
+\ifcsname adjustbox\endcsname
+\newcommand{\PFTTableFit}[1]{\adjustbox{max width=\linewidth}{ #1}}
+\else
+\newcommand{\PFTTableFit}[1]{ #1}
+\fi
+% T1 is what makes \TH, \DH, \L, \O and the Cyrillic author names of a real manuscript typeset.
+% OT1 (the LaTeX default, and what IEEEtran/llncs leave in place) has no slot for them and aborts:
+% "Command \TH unavailable in encoding OT1".
+\usepackage[T1]{fontenc}
 % Commands that preserved table/equation LaTeX uses but whose package a template may not load.
 % \providecommand is a no-op wherever the real package does define them (acmart loads natbib).
 \providecommand{\citep}[2][]{ \cite{ #2}}
@@ -121,9 +154,9 @@ observed context features to model the data-generating process as perceived by t
 
 Methodologically, we use a twin-surrogate model based on disentanglement, alignment, and generator blocks as overviewed in Figure
 \ref{fig:overview}
-\begin{figure}[t]
+\begin{figure}[H]
 \centering
-\includegraphics[width=\linewidth]{imgs/overview.png}
+\includegraphics[width=\linewidth,totalheight=\PFTFigMaxHeight,keepaspectratio]{imgs/overview.png}
 \caption{Overview of the proposed framework, in which the feature extractor ($\Phi_f$) and the feature classifier ($\Phi_c$) are blocks of a trained, given classifier model ( $\Phi_C$). The feature disentanglement ($\Phi_d$), feature alignment ($\Phi_a$), and generator ($\Phi_g$) blocks are part of our proposed twin-surrogate model. The causal graph extraction and feature attribution blocks, together with the generator, provide our explanations. \label{fig:overview} }
 \end{figure}
 . The generator is implemented as an extension of styleGAN-v2
@@ -347,9 +380,9 @@ Based on the above Definition
 
 and with the reference to framework DAG in Figure
 \ref{fig:framworkdag}
-\begin{figure}[!htbp]
+\begin{figure}[H]
 \centering
-\includegraphics[width=\linewidth]{imgs/frameworkdag.png}
+\includegraphics[width=\linewidth,totalheight=\PFTFigMaxHeight,keepaspectratio]{imgs/frameworkdag.png}
 \caption{The flow of information in various blocks of our proposed framework from classifier features to explanations \label{fig:framworkdag} }
 \end{figure}
 we show that the bounded mutual information between $\mathcal{E}'$ and $\mathcal{E}xps$ is the same as the information flow from the classifier to the generated explanations. Due to this, we consider the normalised mutual information as the `faithfulness' metric, given by $\Big( faithfulness index = \frac{\mathcal{I}(\mathcal{E}'; \mathcal{E}xps)}{\sqrt{\mathcal{H}(\mathcal{E}xps)\mathcal{H}(\mathcal{E}')}}\Big)$, where $\mathcal{H}(.)$ corresponds to entropy.
@@ -386,15 +419,15 @@ and
 
 . We report in Table
 \ref{table:explanationresults}
-\begin{table}[!htbp]
+\begin{table}[H]
 \centering
 \caption{Quantitative comparison between multiple explanation methods with respect to faithfulness and stability properties (higher values indicate better performance). \label{table:explanationresults} }
-\begin{tabular}{@{}lccccc@{}}
+\PFTTableFit{\begin{tabular}{@{}lccccc@{}}
 \toprule
 \begin{tabular}[c]{@{}l@{}}Metrics $\downarrow$ | Methods $\rightarrow$\end{tabular} & LIME & DeepSHAP & DeepLIFT & GradCAM & Ours \\ \midrule
 \begin{tabular}[c]{@{}l@{}} \textit{Faithfullness Index}\end{tabular} &   0.22  &  0.67    &  0.92   &  0.22  &  \textbf{0.97}  \\
 \begin{tabular}[c]{@{}l@{}} \textit{Stability Index}\end{tabular}  &      -1.40 &  -0.07  &  -0.04  & -2.53  &  \textbf{-0.02} \\ \bottomrule
-\end{tabular}
+\end{tabular}}
 \end{table}
 the average faithfulness and
 
@@ -413,7 +446,22 @@ selected based on the frequency of values of these features and their extent of 
 (b) demonstrates a given image as perceived by the classifier along with importance scores for observed context features and the effect on confidence scores due to an intervention on the smile attribute, and Figure
 \ref{fig:ffhqresults}
 (c) describes the effect of an intervention on the smile attribute.
-\section{Conclusion}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth,totalheight=\PFTFigMaxHeight,keepaspectratio]{imgs/gtigraph.png}
+\caption{(Quantitative and qualitative) Comparison of causal discovery methods . \label{fig:causaldiscoveries} }
+\end{figure}
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth,totalheight=\PFTFigMaxHeight,keepaspectratio]{imgs/mnistExpComp.png}
+\caption{Demonstration of the effectiveness of GLANCE explanations on the Morpho-MNIST-IT dataset (the global explanation graph is in Figure <ref>(d)). (a) Demonstrates explanations obtained from four standard methods. (b) GLANCE explanations: the first row indicates the original image and the image perceived by the classifier ; the second row indicates aligned features' importance scores and effect on confidence scores with original, perceived, and intervened (w.r.t the thickness attribute) images . (c) The first column shows an intervention on the perceived image and the second column corresponds to the effect of an intervention (difference between perceived and intervened images). \label{fig:mmnistresults} }
+\end{figure}
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth,totalheight=\PFTFigMaxHeight,keepaspectratio]{imgs/ffhqdag.png}
+\caption{(a) DAG generated by our proposed method. (b) GLANCE explanations: the first row indicates the original image and the image perceived by the classifier ; the second row indicates feature importance scores and effect on confidence scores with original, perceived, and intervened ( w.r.t the smile attribute) image . (c) The first column demonstrates an intervention on the perceived image and the second column corresponds to the effect of an intervention. \label{fig:ffhqresults} }
+\end{figure}\section{Conclusion}
 We present GLANCE, a novel explanation framework that uses latent space vocabulary to generate global explanations in terms of graphs and local explanations in terms of feature importance scores; then, a generator can be used to visualize the effect of feature importance and interactions. We validate both causal discovery and GLANCE explanations both qualitatively and quantitatively against existing standard explanations methods. The proposed method for extraction of global explanations (in the form of DAGs) follows carefully constructed steps using the ideas of intervention, indicating the causal interaction and influence among features in latent space. The quantification of faithfulness helps us consider explanations more carefully, and this helps us differentiate between explanations obtained from the underlying classifier model and explanations generated from data alone. We do not consider assigning semantic meaning to aligned features in this work, which could be a possible direction for future work. GLANCE, along with assigned semantic meaning to latent features similar to
 \cite{ghorbani2019towards}
 , would effectively communicate the decision making parameters in classifiers to humans, thereby increasing the quality of explanations. Furthermore, extending the framework to explain other models beyond classifiers for visual data, such as time series, text, or tabular data, can broaden the impact of our framework.
@@ -444,6 +492,11 @@ Here, we consider explaining a model trained on synthetic data based on MNIST di
 \cite{castro2019morpho}
 . We define multiple data-generating process with four different variables thickness, width, slant, and intensity, and observe how our proposed method retrieves this causal structure using latent information via controlled interventions. In this setup thickness corresponds to the stroke thickness of a digit, width corresponds to the total width of a written digit, slant corresponds to the shear factor along a horizontal direction, and intensity corresponds to the average intensity of pixels in a digit. Functions $SetIntensity( · ; i)$, $SetSlant( · ; s)$, $SetWidth( · ; w)$, and $SetThickness( · ; t)$ refer to the operations applied to original MNIST digit to generate new image $x$ with desired properties by controlling image morphology. Below we formally define 4 different data-generating senarios, Figure
 \ref{fig:synthDataExp}
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth,totalheight=\PFTFigMaxHeight,keepaspectratio]{imgs/tix.png}
+\caption{Causal discoveries on various different data-generating processes. Top row describes the causal relationships followed in data-generating process, second row shows the discoveries made by our proposed method, third row shows the cluster formed by a feature disentanglement block to describe an alignment effect, fourth row describes the effectiveness of our alignment block in aligning model latent features to observed context features. In (a) thickness causes intensity and both thickness and intensity causally affects image, the same behaviour can be observed in generated causal graph with graph correctnessIndex=1.0. In (b) intensity causes thickness, we selected this example to examine algorithms behaviour in the case of a reversed causal link(w.r.t (a)), and the correct behaviour is observed in the generated graph with correctnessIndex=1.0. In (c) thickness causes slant, again the generated graph shows similar behaviour with correctnessIndex=0.98. In (d) we tried adding multiple causal variables with higher relationship depth, and our proposed method was able to reconstruct these relationships with correctnessIndex=0.94. \label{fig:synthDataExp} }
+\end{figure}
 pictorially demonstrates causal structure used in data-generating performance and our model performance.
 
 Morpho-MNIST-TI: In this setting we consider two causal variables thickness and intensity, where thickness causes intensity. Mathematically the functional relationship between variables are defined as described in equation
@@ -504,6 +557,11 @@ To explain the importance of each feature for a classifier, we perform a LIME fe
 
 As interventions may not have a monotonic effect, we conduct two specific queries, one positively increasing feature value while the other reducing the feature value. Figure
 \ref{fig:morhpoMNISTresults}
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth,totalheight=\PFTFigMaxHeight,keepaspectratio]{imgs/test.png}
+\caption{Following figure demonstrates the effectiveness of our proposed explanations and other standard existing explanation frameworks \label{fig:morhpoMNISTresults} }
+\end{figure}
 shows the generated counterfactual and the classifier probability describing the importance of a specific positively intervened feature. Based on the extracted graph, an interventional behaviour of a feature on an image, and each feature's contribution to the final classifier's decision, we get a comprehensive idea of the classifier's reasoning.
 \subsection{Comparative study}\subsubsection{Graph Generation}
 Most of the existing causal discoveries method try to extract relationships between nodes by assuming a particular structure of models. However, in our case, since we have access to an implicit causal model, we consider trained models as an oracle to perform specific interventions. As we observe feature behavior against an actual cause rather than a model hypothesis, we have the flexibility to extract feature relations without any explicit assumptions.
@@ -512,10 +570,10 @@ We use the graph correctness index defined in
 
 to quantify the performance difference between all three methods; table
 \ref{table:discoveryresults}
-\begin{table}[!htbp]
+\begin{table}[H]
 \centering
 \caption{Table describes quantitative comparison between causal multiple causal discovery methods on four different versions of Morpho-MNIST dataset as described in <ref> using graph correctnessIndex. \label{table:discoveryresults} }
-\begin{tabular}{@{}llll@{}}
+\PFTTableFit{\begin{tabular}{@{}llll@{}}
 
 \toprule
 \begin{tabular}[c]{@{}l@{}}Datasets $\downarrow$ \textbackslash\\ Methods $\rightarrow$\end{tabular} & \begin{tabular}[c]{@{}l@{}}LinGAM \\ Based \cite{maeda2020rcd}\end{tabular} & \begin{tabular}[c]{@{}l@{}}GES \\ Based \cite{chickering2002optimal}\end{tabular} & Ours \\ \midrule
@@ -523,7 +581,7 @@ Morpho-MNIST (TI)                                                               
 Morpho-MNIST (IT)                                                                                &  0.66                                                                              &  0.66                                                                              &    \textbf{1.0}  \\
 Morpho-MNIST (TS)                                                                                & 0.82                                                                               &  0.66                                                                             &    \textbf{0.98}  \\
 Morpho-MNIST (TSWI)                                                                              &  0.58                                                                             & 0.42                                                                              &  \textbf{0.94}    \\ \bottomrule
-\end{tabular}
+\end{tabular}}
 \end{table}
 describes the results.
 \subsubsection{Explanation}
@@ -545,49 +603,26 @@ For the second case study, we consider the high resolution human faces dataset (
 \cite{karras2019style}
 , this dataset consists of approximately 200k images of 128x128 resolution with 40 different binary attributes, and the task is to categorize images based on gender (0 = male; 1=female). As the causal structure is unknown, we consider only ten significantly present attributes in the dataset. In our experiment, these attributes are subjectively based on their interactions with respect to other attributes. We pick features that are seemingly orthogonal to one another because that helps us to assume ground-truth causal structure to follow naive Bayes structure with all the selected features. The ten attributes which we used in our experiment include (sh: straight-hair, wh: wavy-hair, y: young, m: mustache, b: beard, hc: high-cheekbones, hm: heavy-makeup, s: smiling, l: lipstick, o: open-mouth), and the structure of assumed ground truth DAG is described in Figure
 \ref{fig:ffhqgraph-gt}
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth,totalheight=\PFTFigMaxHeight,keepaspectratio]{imgs/ffhq-gt.png}
+\caption{Assumed true causal structure between attributes and image. \label{fig:ffhqgraph-gt} }
+\end{figure}
 For causal discovery and explanations, we consider 512 latent features to capture all the information in the data distribution. Obtained explanations from our method for the classifiers trained on this dataset are described in Figure
 \ref{fig:ffhqexplanations}
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth,totalheight=\PFTFigMaxHeight,keepaspectratio]{imgs/ffhqtest.png}
+\caption{First row shows an original image, second row describes reconstructed images, while third shows the effect of intervention, followed by difference between interventional and perceived images, and feature importance as perceived by classifier. Last row corresponds to feature attribution explanations on extracted features in latent space \label{fig:ffhqexplanations} }
+\end{figure}
 . Here, we consider 'smile' as an interventional attribute; the higher attention around the mouth region can be easily seen in different images, indicating the effect of smile intervention. In this current work, we faced challenges with generating high quality counterfactuals. In the future, we are planning to extend this work with auxiliary modules to learn and associate causal attributes with generating high quality and meaningful counterfactuals.
 \section{Training}
 We trained all our models on a system with GPU: Nvidia Telsa T4 16GB, CPU: Intel(R) Xeon(R) Gold 6230, and RAM of 384GB. In case of Morpho-MNIST, images were resized to $32\times32$ and models were trained with batchsize of 32 with learning rate = 1e-3, $\lambda_1 = 10., \lambda_2 = 30., \lambda_3 = 30.0, \& \lambda_4 = 1.0$. In case of AFHQ, images were resized to $128\times128$ and models weere trained with batchsize of 8 with learning rate = 2e-4, $\lambda_1 = 10.0, \lambda_2 = 40.0, \lambda_3 = 80.0, \& \lambda_4 = 1.0$.
 
 
 
-\begin{figure}[!htbp]
-\centering
-\includegraphics[width=\linewidth]{imgs/gtigraph.png}
-\caption{(Quantitative and qualitative) Comparison of causal discovery methods . \label{fig:causaldiscoveries} }
-\end{figure}
-\begin{figure}[!htbp]
-\centering
-\includegraphics[width=\linewidth]{imgs/mnistExpComp.png}
-\caption{Demonstration of the effectiveness of GLANCE explanations on the Morpho-MNIST-IT dataset (the global explanation graph is in Figure <ref>(d)). (a) Demonstrates explanations obtained from four standard methods. (b) GLANCE explanations: the first row indicates the original image and the image perceived by the classifier ; the second row indicates aligned features' importance scores and effect on confidence scores with original, perceived, and intervened (w.r.t the thickness attribute) images . (c) The first column shows an intervention on the perceived image and the second column corresponds to the effect of an intervention (difference between perceived and intervened images). \label{fig:mmnistresults} }
-\end{figure}
-\begin{figure}[!htbp]
-\centering
-\includegraphics[width=\linewidth]{imgs/ffhqdag.png}
-\caption{(a) DAG generated by our proposed method. (b) GLANCE explanations: the first row indicates the original image and the image perceived by the classifier ; the second row indicates feature importance scores and effect on confidence scores with original, perceived, and intervened ( w.r.t the smile attribute) image . (c) The first column demonstrates an intervention on the perceived image and the second column corresponds to the effect of an intervention. \label{fig:ffhqresults} }
-\end{figure}
-\begin{figure}[!htbp]
-\centering
-\includegraphics[width=\linewidth]{imgs/tix.png}
-\caption{Causal discoveries on various different data-generating processes. Top row describes the causal relationships followed in data-generating process, second row shows the discoveries made by our proposed method, third row shows the cluster formed by a feature disentanglement block to describe an alignment effect, fourth row describes the effectiveness of our alignment block in aligning model latent features to observed context features. In (a) thickness causes intensity and both thickness and intensity causally affects image, the same behaviour can be observed in generated causal graph with graph correctnessIndex=1.0. In (b) intensity causes thickness, we selected this example to examine algorithms behaviour in the case of a reversed causal link(w.r.t (a)), and the correct behaviour is observed in the generated graph with correctnessIndex=1.0. In (c) thickness causes slant, again the generated graph shows similar behaviour with correctnessIndex=0.98. In (d) we tried adding multiple causal variables with higher relationship depth, and our proposed method was able to reconstruct these relationships with correctnessIndex=0.94. \label{fig:synthDataExp} }
-\end{figure}
-\begin{figure}[!htbp]
-\centering
-\includegraphics[width=\linewidth]{imgs/test.png}
-\caption{Following figure demonstrates the effectiveness of our proposed explanations and other standard existing explanation frameworks \label{fig:morhpoMNISTresults} }
-\end{figure}
-\begin{figure}[!htbp]
-\centering
-\includegraphics[width=\linewidth]{imgs/ffhq-gt.png}
-\caption{Assumed true causal structure between attributes and image. \label{fig:ffhqgraph-gt} }
-\end{figure}
-\begin{figure}[!htbp]
-\centering
-\includegraphics[width=\linewidth]{imgs/ffhqtest.png}
-\caption{First row shows an original image, second row describes reconstructed images, while third shows the effect of intervention, followed by difference between interventional and perceived images, and feature importance as perceived by classifier. Last row corresponds to feature attribution explanations on extracted features in latent space \label{fig:ffhqexplanations} }
-\end{figure}
+% Nothing may be typeset after the references start: this flushes every float still queued.
+\FloatBarrier
 
 \bibliographystyle{splncs04}
 \begin{thebibliography}{99}

@@ -69,6 +69,44 @@
 \ifcsname captionof\endcsname\else\providecommand{\captionof}[2]{ #1: #2}\fi
 {%- endmacro %}
 
+{% macro render_float_support() -%}
+% ------------------------------------------------------------------ float placement (Session 13)
+% Every float the renderer emits is pinned with the [H] option, so it is typeset exactly where it
+% stands. float.sty is what defines H. Without it TeX treats a float as movable, which is how
+% 2005.14165's Table II was typeset on top of its Table I.
+\usepackage{graphicx}
+\usepackage{float}
+% placeins supplies \FloatBarrier, used once per document immediately before the reference list:
+% that is what stops a float being typeset between two \bibitem entries. The [section] option is
+% deliberately NOT requested - it patches \section, and acmart refuses that with
+% "An attempt to redefine \section detected". It would be redundant anyway: every float here is
+% [H], so TeX is never holding one over a section boundary in the first place.
+\IfFileExists{placeins.sty}{\usepackage{placeins}}{\providecommand{\FloatBarrier}{\clearpage}}
+% The tallest figure a page can hold. A float has no page-break inside it, so an uncapped figure
+% that scaled taller than the measure simply ran off the bottom of the page - the "some images are
+% cut down" report. totalheight (not height) only binds when the width-driven scale would overflow,
+% so a figure that already fits is untouched.
+\newcommand{\PFTFigMaxHeight}{0.82\textheight}
+% A wide table is the other half of the "overlapping" report: GPT-3's eight-column Table I is
+% typeset into a two-column IEEEtran page, and with no constraint its last column ran over the
+% facing column. \PFTTableFit shrinks a table to the measure when it is too wide and leaves it
+% untouched when it is not (adjustbox's max width never upscales). The two-step definition is
+% deliberate: a parameter token inside another macro's argument (here, a #1 within the branches of
+% \IfFileExists) is re-scanned when that argument becomes a definition and LaTeX aborts with
+% "Illegal parameter number in definition of \reserved@a", so \PFTTableFit is defined at top level
+% after the load has been tried.
+\IfFileExists{adjustbox.sty}{\usepackage{adjustbox}}{}
+\ifcsname adjustbox\endcsname
+\newcommand{\PFTTableFit}[1]{\adjustbox{max width=\linewidth}{ #1}}
+\else
+\newcommand{\PFTTableFit}[1]{ #1}
+\fi
+% T1 is what makes \TH, \DH, \L, \O and the Cyrillic author names of a real manuscript typeset.
+% OT1 (the LaTeX default, and what IEEEtran/llncs leave in place) has no slot for them and aborts:
+% "Command \TH unavailable in encoding OT1".
+\usepackage[T1]{fontenc}
+{%- endmacro %}
+
 {% macro render_macros(macros) -%}
 {%- for d in macros or [] %}
 {{ d }}
@@ -80,14 +118,35 @@
 {%- endmacro %}
 
 {% macro authors_ieee(authors, keywords=[]) -%}
+{%- set people = authors or [] -%}
 \author{
-{%- for a in authors or [] -%}
+{%- if people | length > 8 %}
+{#- IEEEtran conference mode lays \and-separated blocks out in two columns and is meant for a
+    handful of authors. With 32 (2005.14165) the column machinery gives up and the names are
+    typeset as one running paragraph, which is the "Rewon ChildAditya RameshDaniel M. Ziegler"
+    report: no separator at all. A long author list is printed by IEEE as one comma-separated
+    block, which is what this branch emits. 8 is the point where the two-column layout stops
+    fitting; papers at or under it keep the block-per-author form they render correctly with. -#}
+\IEEEauthorblockN{\parbox[t]{\textwidth}{
+{%- for a in people -%}
+{%- if not loop.first %}{{ ", and " if loop.last else ", " }}{% endif -%}
+{{- a.name | default("Anonymous", true) | texu -}}
+{%- endfor -%}
+}}
+{%- set orgs = [] %}
+{%- for a in people %}{% if a.affiliation and a.affiliation not in orgs %}{% set _ = orgs.append(a.affiliation) %}{% endif %}{% endfor %}
+{%- if orgs %}
+\IEEEauthorblockA{ {{- orgs | map("texu") | join(", ") -}} }
+{%- endif %}
+{%- else %}
+{%- for a in people -%}
 {%- if not loop.first %} \and {% endif -%}
 \IEEEauthorblockN{ {{- a.name | default("Anonymous", true) | texu -}} }
 {%- if a.affiliation %}
 \IEEEauthorblockA{ {{- a.affiliation | texu -}} {%- if a.email %}\\ {{- a.email | texu -}} {% endif %}}
 {%- endif -%}
 {%- endfor -%}
+{%- endif %}
 {%- if keywords %}
 \thanks{Index Terms---{{ keywords | map("texu") | join(", ") -}} }
 {%- endif %}
@@ -186,10 +245,12 @@
 {%- endmacro %}
 
 {% macro render_figure(fig) -%}
-\begin{figure}[ {{- fig.get("placement") | placement -}} ]
+\begin{figure}[{{ FLOAT_PLACEMENT }}]
 \centering
 {%- if fig.get("path") %}
-\includegraphics[width=\linewidth]{ {{- fig["path"] | graphpath -}} }
+\includegraphics[width={{ float_width(format, fig.get("span")) }},totalheight=\PFTFigMaxHeight,keepaspectratio]{ {{- fig["path"] | graphpath -}} }
+{%- else %}
+\fbox{\textit{[Figure: the source drew this with TikZ/PGF, which this class does not load]}}
 {%- endif %}
 \caption{ {{- render_with_math(fig.get("caption") or "", fig.get("math_spans") or []) -}}
 {%- if fig.get("label") %} \label{ {{- fig["label"] | citekey -}} }{% endif %} }
@@ -198,11 +259,11 @@
 {%- endmacro %}
 
 {% macro render_table(tab) -%}
-\begin{table}[ {{- tab.get("placement") | placement -}} ]
+\begin{table}[{{ FLOAT_PLACEMENT }}]
 \centering
 \caption{ {{- render_with_math(tab.get("caption") or "", tab.get("math_spans") or []) -}}
 {%- if tab.get("label") %} \label{ {{- tab["label"] | citekey -}} }{% endif %} }
-{{ tab.get("latex") or "" }}
+\PFTTableFit{ {{- tab.get("latex") or "" -}} }
 \end{table}
 
 {%- endmacro %}

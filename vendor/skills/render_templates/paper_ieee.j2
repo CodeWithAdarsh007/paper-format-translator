@@ -9,10 +9,9 @@
     \begin{document}") and leaks when it stays in the body, so the keywords ride in a \thanks note
     inside \author: legal IEEEtran, typeset on the first page, and invisible to the paragraph scan.
 -#}
-{% from "_shared.j2" import render_title, render_macros, render_compat, authors_ieee, render_section,
-        render_floats, render_references with context %}
+{% from "_shared.j2" import render_title, render_macros, render_compat, render_float_support,
+        authors_ieee, render_section, render_floats, render_references with context %}
 \documentclass[conference]{IEEEtran}
-\usepackage{graphicx}
 \usepackage{amsmath}
 \usepackage{amssymb}
 \usepackage{amsfonts}
@@ -26,7 +25,7 @@
 \usepackage{colortbl}
 \usepackage{bm}
 \usepackage{makecell}
-\usepackage{float}
+{{ render_float_support() }}
 {{ render_compat() }}
 {{ render_macros(macros) }}
 {{ render_title(metadata.title) }}
@@ -43,6 +42,9 @@
 
 {{ render_floats(pending_figures if pending_figures is defined else figures,
                  pending_tables if pending_tables is defined else tables) }}
+% Nothing may be typeset after the references start: this flushes every float still queued, which
+% is what put figures between reference entries on the deployed app.
+\FloatBarrier
 
 \bibliographystyle{IEEEtran}
 {{ render_references(references) }}

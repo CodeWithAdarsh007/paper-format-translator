@@ -7,7 +7,41 @@
 \usepackage{colortbl}
 \usepackage{bm}
 \usepackage{makecell}
-\usepackage{float}\IfFileExists{libertine.sty}{}{\AtBeginDocument{\ifcsname microtypesetup\endcsname
+% ------------------------------------------------------------------ float placement (Session 13)
+% Every float the renderer emits is pinned with the [H] option, so it is typeset exactly where it
+% stands. float.sty is what defines H. Without it TeX treats a float as movable, which is how
+% 2005.14165's Table II was typeset on top of its Table I.
+\usepackage{graphicx}
+\usepackage{float}
+% placeins supplies \FloatBarrier, used once per document immediately before the reference list:
+% that is what stops a float being typeset between two \bibitem entries. The [section] option is
+% deliberately NOT requested - it patches \section, and acmart refuses that with
+% "An attempt to redefine \section detected". It would be redundant anyway: every float here is
+% [H], so TeX is never holding one over a section boundary in the first place.
+\IfFileExists{placeins.sty}{\usepackage{placeins}}{\providecommand{\FloatBarrier}{\clearpage}}
+% The tallest figure a page can hold. A float has no page-break inside it, so an uncapped figure
+% that scaled taller than the measure simply ran off the bottom of the page - the "some images are
+% cut down" report. totalheight (not height) only binds when the width-driven scale would overflow,
+% so a figure that already fits is untouched.
+\newcommand{\PFTFigMaxHeight}{0.82\textheight}
+% A wide table is the other half of the "overlapping" report: GPT-3's eight-column Table I is
+% typeset into a two-column IEEEtran page, and with no constraint its last column ran over the
+% facing column. \PFTTableFit shrinks a table to the measure when it is too wide and leaves it
+% untouched when it is not (adjustbox's max width never upscales). The two-step definition is
+% deliberate: a parameter token inside another macro's argument (here, a #1 within the branches of
+% \IfFileExists) is re-scanned when that argument becomes a definition and LaTeX aborts with
+% "Illegal parameter number in definition of \reserved@a", so \PFTTableFit is defined at top level
+% after the load has been tried.
+\IfFileExists{adjustbox.sty}{\usepackage{adjustbox}}{}
+\ifcsname adjustbox\endcsname
+\newcommand{\PFTTableFit}[1]{\adjustbox{max width=\linewidth}{ #1}}
+\else
+\newcommand{\PFTTableFit}[1]{ #1}
+\fi
+% T1 is what makes \TH, \DH, \L, \O and the Cyrillic author names of a real manuscript typeset.
+% OT1 (the LaTeX default, and what IEEEtran/llncs leave in place) has no slot for them and aborts:
+% "Command \TH unavailable in encoding OT1".
+\usepackage[T1]{fontenc}\IfFileExists{libertine.sty}{}{\AtBeginDocument{\ifcsname microtypesetup\endcsname
   \microtypesetup{expansion=false}\fi}}
 % Commands that preserved table/equation LaTeX uses but whose package a template may not load.
 % \providecommand is a no-op wherever the real package does define them (acmart loads natbib).
@@ -75,7 +109,12 @@ Large language models (LLMs) have demonstrated remarkable reasoning capability i
 
 
 [1]Corresponding Authors. [2]Work during internship at Shanghai AI Lab. [3]Code: <https://github.com/pzs19/LEMMA>
-\section{Introduction}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth,totalheight=\PFTFigMaxHeight,keepaspectratio]{figure/lemma_small_fig.pdf}
+\caption{Overview of LEMMA. \label{fig:lemma_small} }
+\end{figure}\section{Introduction}
 Recently, Large Language Models (LLMs) have significantly improved their ability to solve mathematical problems through Supervised Fine-Tuning (SFT). A common strategy involves refining the quality of chain-of-thought (CoT) reasoning data, such as distilling high-quality solutions from advanced models
 \cite{magister2023teaching,yu2distilling}
 . While these methods enhance the model's capacity to generate step-by-step solutions, they predominantly focus on optimizing correct reasoning trajectories while overlooking the potential of error data. This omission limits the model's ability to learn from mistakes, thereby constraining its reflective reasoning capability. Reflection---the process of identifying, analyzing, and correcting errors---is a critical component of human problem-solving
@@ -136,6 +175,11 @@ can introduce irrelevant errors that the student model would not make. Moreover,
 \section{Methodology}
 To better leverage generated reasoning errors for enhancing the self-reflection and correction capabilities of LLMs, we begin by conducting a systematic analysis of common error types in widely-used models. Building on this analysis, we introduce LEMMA, a novel approach that strategically constructs self-correction data to improve the mathematical reasoning abilities of LLMs. Fig.
 \ref{fig:lemma}
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth,totalheight=\PFTFigMaxHeight,keepaspectratio]{figure/lemma_wide_fig.pdf}
+\caption{The LEMMA framework. LEMMA uses an error-type grounded mistake augmentation module, and explores two error correction strategies to construct the incorrect-correct revision trajectory as training corpus. \label{fig:lemma} }
+\end{figure}
 provides an overview of the LEMMA framework.
 \subsection{Task Formulation}
 We begin by defining key components of LEMMA. The generated reasoning trajectory $\mathbf{\tau}$ is a sequence of reasoning steps: $\mathbf{\tau} = (s_{1}, s_{2}, \dots, s_{n}, \hat{a})$, where $\hat{a}$ is the predicted answer. A bad trajectory includes both correct steps $s^{g}$, incorrect steps $s^{g}$ and ends with an incorrect answer: $\tau^{b} = (s^{g}_{1}, \dots, s^{g}_{k}, s^{b}_{1}, \dots, s^{b}_{m}, \hat{a}^{b})$. Models equipped with reflection and self-correction capabilities should be able to identify and rectify the incorrect steps $\{s^{b}_{1}, ..., s^{b}_{m}\}$, leading to a revised trajectory. The revised trajectory can be viewed as the concatenation of a bad trajectory, a Reflection Phrase ($\textit{RP}$), and a correct trajectory $\tau^{g}$, expressed as $\tau^{r}=\tau^{b} \oplus \textit{RP} \oplus \tau^{g}$. Here, $\textit{RP}$ represents the reflection phrases that pinpoint and correct previous errors while seamlessly transitioning to a correct step. To minimize error accumulation, the model should recognize and correct errors as early as possible. Therefore, the bad trajectory $\tau^{b}$ should be a subsequence that ends at the first erroneous step, denoted as $\tau^{b}_{sub} = (s^{g}_{1}, \dots, s^{g}_{k}, s^{b}_{1})$. The following paragraphs will detail how we collect the bad sub-trajectory $\tau^{b}_{sub}$ and the good trajectory $\tau^{g}$, ultimately constructing the error-corrective revision trajectory $\tau^{r} = \tau^{b}_{sub} \oplus \textit{RP} \oplus \tau^{g}$ for model training.
@@ -144,10 +188,10 @@ To gain a holistic understanding of the mathematical reasoning errors in common 
 \cite{li-etal-2024-evaluating-mathematical}
 , as detailed in Tab.
 \ref{tab:error_taxonomy}
-\begin{table}[h!]
+\begin{table}[H]
 \centering
 \caption{Error taxonomy modified from <cit.>. Corresponding examples are in Fig.<ref> of appendix <ref>. Some infrequent error types are omitted to save space. For the full taxonomy, please check Tab.<ref> in the appendix. \label{tab:error_taxonomy} }
-\centering
+\PFTTableFit{\centering
     
     
     \resizebox{\textwidth}{!}{
@@ -164,7 +208,7 @@ To gain a holistic understanding of the mathematical reasoning errors in common 
         \textbf{Nonsensical Output (NO)} & Inconceivable, illogical, or question-irrelevant output.\\
         \bottomrule[0.15em]
     \end{tabular}
-    }
+    }}
 \end{table}
 . Fig.
 \ref{fig:error_type}
@@ -191,7 +235,17 @@ Based on our analysis of the relationship between error types and sampling tempe
 However, as our objective is not to induce the model to learn flawed reasoning but rather to learn reflection, we also instruct the teacher model to annotate the first erroneous step within each incorrect trajectory $\tau^{b}$. Then, the incorrect trajectory is truncated at this identified step to create a sub-trajectory $\tau^{b}_{sub} = (s^{g}_{1}, \dots, s^{g}_{k}, s^{b}_{1})$. This design guides the fine-tuned models to timely recognize and rectify their errors, preventing them from proceeding with reasoning from an erroneous step. Using this approach, we compile a comprehensive collection of bad trajectories, which consists of: (1) the erroneous trajectories generated by error augmentation and (2) those produced by the student model itself. This strategy mirrors the human learning process, where students not only reflect on and correct their own mistakes but also receive guidance from teachers, who highlight common error-prone steps based on the overall performance of all students. This error-type grounded mistake augmentation method sets our approach apart from prior work. It avoids the inclusion of meaningless or irrelevant errors generated by using a high sampling temperature
 \cite{xi2024enhancing,yan2024s,lu2024step,zhang-etal-2024-small,han2024small}
 or collected from other models
-\cite{an2023learning}\subsection{Revision Trajectory Generation}
+\cite{an2023learning}
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth,totalheight=\PFTFigMaxHeight,keepaspectratio]{figure/error-type_pie_chart_llama_math.pdf}
+\caption{LLaMA3-8B \label{fig:error_type_llama} }
+\end{figure}
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth,totalheight=\PFTFigMaxHeight,keepaspectratio]{figure/error_type_bar_math.pdf}
+\caption{(a) Error type distribution on MATH. \label{fig:error_type_bar} }
+\end{figure}\subsection{Revision Trajectory Generation}
 Upon obtaining the bad trajectory $\tau^{b}_{sub}$, we proceed with a correction process to generate the final revision trajectory $\tau^{r} = \tau^{b}_{sub} \oplus \textit{RP} \oplus \tau^{g}$. Inspired by the self-correction process in humans
 \cite{hoffmann2018stimulating}
 , we explore two correction strategies:
@@ -268,10 +322,10 @@ discusses more details regarding baseline implementation.
 \subsection{Main Result}
 Tab.
 \ref{tab:main_result}
-\begin{table}[h!]
+\begin{table}[H]
 \centering
 \caption{Performance comparison on GSM8K, MATH and out-of-distribution datasets. $^\dag$: numbers reported in <cit.>. The best result is highlighted in bold, and the second best is underlined. \label{tab:main_result} }
-\small
+\PFTTableFit{\small
     \centering
     \renewcommand{\arraystretch}{0.95}
     
@@ -316,7 +370,7 @@ Tab.
         \rowcolor {gray!20} LEMMA (w/ MetaMath) & 403.59k & \bf 83.0 & \bf 51.7 & \bf 90.4 & \bf 65.8 & \bf 91.9 & \underline{82.1} & \underline{35.2} & \bf 71.4  \\
         \bottomrule[0.15em]
     \end{tabular}
-    }
+    }}
 \end{table}
 lists the performance of different methods. We summarize the key findings as follows.
 
@@ -330,10 +384,10 @@ achieves superior performance, our method is not directly comparable to DART-Mat
 \cite{liang2024mathchat}
 as shown in Tab.
 \ref{tab:reflection}
-\begin{table}[!h]
+\begin{table}[H]
 \centering
 \caption{Evaluation on reflective math reasoning using LLaMA3-8B. ``DART-Math-U.'' denotes DART-MATH-Uniform and ``DART-Math-H.'' denotes DART-MATH-Hard. Best result is highlighted in bold. \label{tab:reflection} }
-\centering
+\PFTTableFit{\centering
     \small
     \renewcommand{\arraystretch}{0.9}
     
@@ -359,7 +413,7 @@ as shown in Tab.
             \bottomrule
         \end{tabular}
     }
-\vspace{-5mm}
+\vspace{-5mm}}
 \end{table}
 . (2) Interestingly, RFT
 \cite{yuan2023scaling}
@@ -381,10 +435,10 @@ show some output cases where the model fine-tuned with LEMMA performs reflection
 \subsection{Integration with DART-Math}
 LEMMA is not contradictory but rather complementary to DART-MATH. Inspired by their work, we synthesize more error-corrective solutions for more challenging problems. Specifically, we calculate the failure rate of the LLaMA3-8B model to determine the number of solutions to synthesize for each sample. For each problem, we generate $n=f\times k_{max}$ data points, where $f$ is the failure rate and $k_{max}$ is the maximum number of solutions per question. Among these error-corrective solutions, half of the errors are generated by the student model itself, and the other half are introduced by the teacher model. We set $k_{max}$ to $20$, resulting in a total of $90.7k$ samples. We refer to this setting as LEMMA-Hard. The results presented in Tab.
 \ref{tab:compare_dart_math}
-\begin{table}[h!]
+\begin{table}[H]
 \centering
 \caption{Performance comparison between different variants of LEMMA and DART-MATH on LLaMA3-8B. ``DART-Math-H. (90k)'' denotes a $90.7k$ dataset downsampled from DART-MATH-Hard. ``LEMMA-Hard'' denotes integrating LEMMA with DART-MATH. \label{tab:compare_dart_math} }
-\small
+\PFTTableFit{\small
     \centering
     \renewcommand{\arraystretch}{0.9}
     
@@ -401,7 +455,7 @@ LEMMA is not contradictory but rather complementary to DART-MATH. Inspired by th
         LEMMA-Hard & 90.7k & \bf 83.1 & 44.8 & \bf 63.9 \\
         \bottomrule
     \end{tabular}
-    }
+    }}
 \end{table}
 demonstrate that this setting improves the performance of our LEMMA, outperforming the model trained on a $90.7k$ dataset downsampled from DART-Math-Hard by an average accuracy gain of $1.8\%$, and is comparable to models trained on the complete $585k$ DART-Math-Hard dataset.
 \subsection{Choice of Teacher Model}
@@ -414,21 +468,31 @@ of Appendix
 We examine the impact of sample size on the performance of different methods. The results presented in Fig.
 \ref{fig:acc_size_half}
 , highlight several key observations. (1) LEMMA consistently achieves superior performance across various sample sizes. Notably, as the dataset size increases, the performance gap between LEMMA and other baselines widens, underscoring its scalability potential. (2) LEMMA demonstrates stable performance improvements on both in-distribution (MATH) and out-of-distribution (Mathematics) datasets as the data size grows. In contrast, some baseline methods, such as ISC and RefAug, although showing gains on in-distribution datasets like MATH, tend to plateau or even decline in performance on out-of-distribution datasets. This saturation suggests that these methods might overfit to in-distribution data, lacking the generalization capabilities that LEMMA provides.
-\subsection{Analysis on Error Type after Fine-tuning.}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth,totalheight=\PFTFigMaxHeight,keepaspectratio]{figure/acc_size_math.pdf}
+\caption{Pass@1 on MATH. \label{fig:acc_size_math} }
+\end{figure}\subsection{Analysis on Error Type after Fine-tuning.}
 We analyze the types of errors generated by the model before and after fine-tuning with LEMMA. We report the error count of the model before fine-tuning (Base), the model fine-tuned on the original dataset (SFT), and the model fine-tuned with our LEMMA approach. The results presented in Fig.
 \ref{fig:error_type_before_after_math}
 reveal several insightful trends. Firstly, LEMMA consistently reduces the occurrence of common error types, particularly in categories such as ``Question Misinterpretation (QM)'' and ``Calculation Error (CA)''. Secondly, although fine-tuning with the original training data (SFT) improves overall accuracy, it leads to an increase in certain error types, such as ``Confusing Formula Error (FC)''. This can be attributed to limitations in the original training data, which may fail to address specific error patterns and potentially cause overfitting to certain reasoning paths.
-\subsection{Ablation study}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth,totalheight=\PFTFigMaxHeight,keepaspectratio]{figure/error_type_before_after_llama_math.pdf}
+\caption{LLaMA3-MATH \label{fig:error_type_before_after_llama_math} }
+\end{figure}\subsection{Ablation study}
 We perform ablation studies to evaluate the contribution of the two core innovations of LEMMA: (1) the error-type grounded mistake augmentation method (Sec.
 
 ) and (2) the mixed correction strategies (Sec.
 
 ). To evaluate the effectiveness of the mistake augmentation module, we exclude it and rely solely on errors generated by the model itself, which we denote as ``w/o Error Aug''. To ensure that any performance degradation is not simply attributable to a smaller sample size, we generate the same number of revision trajectories as LEMMA, which we refer to as ``w/o Error Aug (90k)''. We also perform ablation on the error correction strategy by removing the ``Fresh \& Restart'' method from the revision process, labeled as ``w/o Fresh \& Restart'' and ``w/o Fresh \& Restart (90k)''. Lastly, ``w/o Truncation'' means that we do not truncate the flawed trajectory at the first identified erroneous step, which aims to verify the necessity of the early truncation of the erroneous reasoning trajectory. We report the accuracy on in-distribution tasks in Tab.
 \ref{tab:ablation}
-\begin{table}[h!]
+\begin{table}[H]
 \centering
 \caption{Ablation study on each component of LEMMA. \label{tab:ablation} }
-\small
+\PFTTableFit{\small
     \centering
     \renewcommand{\arraystretch}{0.9}
     
@@ -447,7 +511,7 @@ We perform ablation studies to evaluate the contribution of the two core innovat
         w/o Truncation & 69.4 & 22.8 \\
         \bottomrule
     \end{tabular}
-    }
+    }}
 \end{table}
 ; for out-of-distribution performance, please refer to Tab.
 \ref{tab:ablation_all}
@@ -484,7 +548,32 @@ In this section, we examine the error types on the GSM8K dataset. We observe a s
 In Fig.
 \ref{fig:error_type_before_after}
 , we present the changes in error types on GSM8K before and after fine-tuning. The results align with those observed on MATH, demonstrating that LEMMA consistently reduces the frequency of all error types. In contrast, while the overall performance of the model improves after fine-tuning with the original training data (SFT), certain specific type of error increase. This further highlights LEMMA's ability to systematically address and mitigate a wide range of errors, leading to more robust and reliable mathematical reasoning capabilities.
-\subsection{Case Study}\subsubsection{Reflection and Self-Correction Output}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth,totalheight=\PFTFigMaxHeight,keepaspectratio]{figure/pdf/error-type_pie_chart_llama_gsm8k.pdf}
+\caption{LLaMA3-8B \label{fig:error_type_llama} }
+\end{figure}
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth,totalheight=\PFTFigMaxHeight,keepaspectratio]{figure/error_type_before_after_llama_math.pdf}
+\caption{LLaMA3-MATH \label{fig:error_type_before_after_llama_math} }
+\end{figure}
+\begin{figure}[H]
+\centering
+\fbox{\textit{[Figure: the source drew this with TikZ/PGF, which this class does not load]}}
+\caption{An example of the two type of solutions. While the initial steps of the brute-force solution are correct, the subsequent process involves intensive computation. Simply correcting the first error step helps a little. Therefore, in the ``Fresh \& Restart'' correction, we encourage the teacher model to rethink from scratch and propose a new solution. All the inter-line equations are manually replaced with inline equations to save space. \label{fig:two_solution} }
+\end{figure}
+\begin{figure}[H]
+\centering
+\fbox{\textit{[Figure: the source drew this with TikZ/PGF, which this class does not load]}}
+\caption{Example outputs generated by the model (LLaMA3-8B) fine-tuned with LEMMA on GSM8K. LEMMA allows the model to reflect on and correct its previous output or perform careful verification before producing the final answer, as highlighted in bold. \label{fig:case_study_gsm8k} }
+\end{figure}
+\begin{figure}[H]
+\centering
+\fbox{\textit{[Figure: the source drew this with TikZ/PGF, which this class does not load]}}
+\caption{Example outputs generated by the model (LLaMA3-8B) fine-tuned with LEMMA on MATH. LEMMA allows the model to reflect on and correct its previous output or perform careful verification before producing the final answer, as highlighted in bold. \label{fig:case_study_math} }
+\end{figure}\subsection{Case Study}\subsubsection{Reflection and Self-Correction Output}
 In Fig.
 \ref{fig:case_study_gsm8k}
 and Fig.
@@ -499,6 +588,11 @@ We present the full error taxonomy in Table
 \subsubsection{Error Type and Corresponding Examples}
 In this section, we present examples of different error types generated by the model. As shown in Fig.
 \ref{fig:error_type_examples}
+\begin{figure}[H]
+\centering
+\fbox{\textit{[Figure: the source drew this with TikZ/PGF, which this class does not load]}}
+\caption{Representative error type and corresponding examples. \label{fig:error_type_examples} }
+\end{figure}
 , we display the problem, the model-generated incorrect answer, the error type label assigned by the model, as well as the model's explanation for the label of representative error types. It can be observed that the model accurately identifies the first error type. Each error type exhibits distinct characteristics, clearly differentiating them from one another.
 \subsubsection{Smart Solution v.s. Brute Force Solution}
 In Fig.
@@ -549,18 +643,33 @@ for an overview of data statistics of the different methods.
 \subsection{Prompt}
 In Fig.
 \ref{fig:introduce_error_prompt}
+\begin{figure}[H]
+\centering
+\fbox{\textit{[Figure: the source drew this with TikZ/PGF, which this class does not load]}}
+\caption{Error augmentation prompt for introducing flawed reasoning trajectories using the teacher model. \label{fig:introduce_error_prompt} }
+\end{figure}
 , Fig.
 \ref{fig:ff_prompt}
+\begin{figure}[H]
+\centering
+\fbox{\textit{[Figure: the source drew this with TikZ/PGF, which this class does not load]}}
+\caption{``Fix \& Continue'' correction prompt. \label{fig:ff_prompt} }
+\end{figure}
+\begin{figure}[H]
+\centering
+\fbox{\textit{[Figure: the source drew this with TikZ/PGF, which this class does not load]}}
+\caption{``Fresh \& Restart'' correction prompt. \label{fig:fr_prompt} }
+\end{figure}
 , and Fig.
 \ref{fig:fr_prompt}
 , we present the prompts used for error injection, Fix \& Continue correction, and Fresh \& Restart correction, respectively. The prompts are designed to guide the teacher model in generating erroneous trajectories and correcting them using the two distinct strategies outlined in our methodology.
 \subsection{Comparison with Additional Baselines}
 To further illustrate the advantages of our method, we conduct additional experiments comparing LEMMA with additional baselines. The results are in Tab.
 \ref{tab:additional_baseline}
-\begin{table}[h!]
+\begin{table}[H]
 \centering
 \caption{Performance comparison with additional baselines on GSM8K, MATH using LLaMA3-8B. \label{tab:additional_baseline} }
-\small
+\PFTTableFit{\small
     \centering
     \renewcommand{\arraystretch}{0.95}
     
@@ -576,12 +685,12 @@ To further illustrate the advantages of our method, we conduct additional experi
         LEMMA & \bf 79.2 & \bf 38.3 & \bf 58.7\\
         \bottomrule
     \end{tabular}
-    }
+    }}
 \end{table}
-\begin{table}[!h]
+\begin{table}[H]
 \centering
 \caption{Data statistics of the different methods. $^\dag$: solutions generated by LLaMA3, $^\star$: numbers reported in <cit.>. \label{tab:data_size} }
-\centering
+\PFTTableFit{\centering
     \small
     
     
@@ -604,12 +713,12 @@ To further illustrate the advantages of our method, we conduct additional experi
             LEMMA (w/ MetaMath) & 403.59k & 544.14 \\
             \bottomrule
         \end{tabular}
-    }
+    }}
 \end{table}
-\begin{table}[h!]
+\begin{table}[H]
 \centering
 \caption{Performance comparison on GSM8K, MATH, and out-of-distribution datasets uses LLaMA-3.1-Nemotron-70B as the teacher model. LEMMA demonstrates robustness to the choice of teacher model. \label{tab:llama3_teacher} }
-\small
+\PFTTableFit{\small
     \centering
     
     
@@ -635,12 +744,12 @@ To further illustrate the advantages of our method, we conduct additional experi
         LEMMA (LLaMA3) & 78.4 & 48.8 & 88.8 & 60.7 & 88.0 & 76.1 & 34.7 & 67.9  \\
         \bottomrule[0.15em]
     \end{tabular}
-    }
+    }}
 \end{table}
-\begin{table}[h!]
+\begin{table}[H]
 \centering
 \caption{Additional results on GSM8K, MATH and out-of-distribution datasets using Mistral-7B-v0.1 and Qwen2-Math-7B. $^\dag$: numbers reported in <cit.>. \label{tab:additional_result} }
-\centering
+\PFTTableFit{\centering
     
     
     \resizebox{\textwidth}{!}{
@@ -680,12 +789,12 @@ To further illustrate the advantages of our method, we conduct additional experi
         \rowcolor {gray!20} LEMMA & 88.90k & \bf 87.4 & \bf 62.9 & \bf 93.0 & \bf 74.1 & 94.8 & 88.9 & \bf 39.1 & \bf 77.2 \\
         \bottomrule[0.15em]
     \end{tabular}
-    }
+    }}
 \end{table}
-\begin{table}[h!]
+\begin{table}[H]
 \centering
 \caption{Performance comparison on GSM8K, MATH and out-of-distribution datasets under Pass@1 and Majority@32 (Maj@32) settings. $^\dag$: numbers reported in <cit.>. The best result is highlighted in bold. For Maj@32 evaluation, temperature is 0.7. \label{tab:maj_vote} }
-\centering
+\PFTTableFit{\centering
     
     
     \resizebox{\textwidth}{!}{
@@ -726,12 +835,12 @@ To further illustrate the advantages of our method, we conduct additional experi
         \rowcolor {gray!20} LEMMA & 88.90k & 80.4  & \bf 89.2  & \bf 50.6  & \bf 63.6  & \bf 89.8  & 93.1  & \bf 61.6  & \bf 77.4  & \bf 35.6  & 36.8  \\
         \bottomrule[0.15em]
     \end{tabular}
-    }
+    }}
 \end{table}
-\begin{table}[h!]
+\begin{table}[H]
 \centering
 \caption{Ablation study on each component of LEMMA. Removing either the mistake augmentation module or the fresh \& restart module results in a dramatic decline in performance. \label{tab:ablation_all} }
-\centering
+\PFTTableFit{\centering
     
     
     \resizebox{\textwidth}{!}{
@@ -748,12 +857,12 @@ To further illustrate the advantages of our method, we conduct additional experi
         w/o Truncation & 69.4 & 22.8 & 77.1 & 29.4 & 85.1 & 75.6 & 18.7 & 54.0 \\
         \bottomrule[0.15em]
     \end{tabular}
-    }
+    }}
 \end{table}
-\begin{table}[h!]
+\begin{table}[H]
 \centering
 \caption{Error taxonomy adapted from <cit.>. We add ``Question Misinterpretation Error (QM)'', ``Confusing Concept Error (CC)'', and ``Nonsensical Output (NO)'' to allow for a more fine-grained identification of error types. Corresponding examples are provided in Figure <ref>. \label{tab:error_taxonomy_full} }
-\centering
+\PFTTableFit{\centering
     
     
     \resizebox{\textwidth}{!}{
@@ -776,7 +885,7 @@ To further illustrate the advantages of our method, we conduct additional experi
         \textbf{Nonsensical Output (NO)} & Inconceivable, illogical, or question-irrelevant output.\\
         \bottomrule[0.15em]
     \end{tabular}
-    }
+    }}
 \end{table}
 . Among these baselines,
 \cite{an2023learning}
@@ -796,74 +905,8 @@ further illustrate the advantages of our method over these baselines.
 
 
 
-\begin{figure}[!h]
-\centering
-\includegraphics[width=\linewidth]{figure/lemma_small_fig.pdf}
-\caption{Overview of LEMMA. \label{fig:lemma_small} }
-\end{figure}
-\begin{figure}[!h]
-\centering
-\includegraphics[width=\linewidth]{figure/lemma_wide_fig.pdf}
-\caption{The LEMMA framework. LEMMA uses an error-type grounded mistake augmentation module, and explores two error correction strategies to construct the incorrect-correct revision trajectory as training corpus. \label{fig:lemma} }
-\end{figure}
-\begin{figure}[!h]
-\centering
-\includegraphics[width=\linewidth]{figure/error-type_pie_chart_llama_math.pdf}
-\caption{LLaMA3-8B \label{fig:error_type_llama} }
-\end{figure}
-\begin{figure}[!h]
-\centering
-\includegraphics[width=\linewidth]{figure/error_type_bar_math.pdf}
-\caption{(a) Error type distribution on MATH. \label{fig:error_type_bar} }
-\end{figure}
-\begin{figure}[!h]
-\centering
-\includegraphics[width=\linewidth]{figure/acc_size_math.pdf}
-\caption{Pass@1 on MATH. \label{fig:acc_size_math} }
-\end{figure}
-\begin{figure}[!h]
-\centering
-\includegraphics[width=\linewidth]{figure/error_type_before_after_llama_math.pdf}
-\caption{LLaMA3-MATH \label{fig:error_type_before_after_llama_math} }
-\end{figure}
-\begin{figure}[!h]
-\centering
-\includegraphics[width=\linewidth]{figure/pdf/error-type_pie_chart_llama_gsm8k.pdf}
-\caption{LLaMA3-8B \label{fig:error_type_llama} }
-\end{figure}
-\begin{figure}[!h]
-\centering
-\includegraphics[width=\linewidth]{figure/error_type_before_after_llama_math.pdf}
-\caption{LLaMA3-MATH \label{fig:error_type_before_after_llama_math} }
-\end{figure}
-\begin{figure}[!htbp]
-\centering
-\caption{An example of the two type of solutions. While the initial steps of the brute-force solution are correct, the subsequent process involves intensive computation. Simply correcting the first error step helps a little. Therefore, in the ``Fresh \& Restart'' correction, we encourage the teacher model to rethink from scratch and propose a new solution. All the inter-line equations are manually replaced with inline equations to save space. \label{fig:two_solution} }
-\end{figure}
-\begin{figure}[!htbp]
-\centering
-\caption{Example outputs generated by the model (LLaMA3-8B) fine-tuned with LEMMA on GSM8K. LEMMA allows the model to reflect on and correct its previous output or perform careful verification before producing the final answer, as highlighted in bold. \label{fig:case_study_gsm8k} }
-\end{figure}
-\begin{figure}[!htbp]
-\centering
-\caption{Example outputs generated by the model (LLaMA3-8B) fine-tuned with LEMMA on MATH. LEMMA allows the model to reflect on and correct its previous output or perform careful verification before producing the final answer, as highlighted in bold. \label{fig:case_study_math} }
-\end{figure}
-\begin{figure}[!ht]
-\centering
-\caption{Representative error type and corresponding examples. \label{fig:error_type_examples} }
-\end{figure}
-\begin{figure}[htbp]
-\centering
-\caption{Error augmentation prompt for introducing flawed reasoning trajectories using the teacher model. \label{fig:introduce_error_prompt} }
-\end{figure}
-\begin{figure}[htbp]
-\centering
-\caption{``Fix \& Continue'' correction prompt. \label{fig:ff_prompt} }
-\end{figure}
-\begin{figure}[htbp]
-\centering
-\caption{``Fresh \& Restart'' correction prompt. \label{fig:fr_prompt} }
-\end{figure}
+% Nothing may be typeset after the references start: this flushes every float still queued.
+\FloatBarrier
 
 \bibliographystyle{ACM-Reference-Format}
 \begin{thebibliography}{99}

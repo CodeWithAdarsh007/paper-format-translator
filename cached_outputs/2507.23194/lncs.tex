@@ -1,6 +1,5 @@
 
 \documentclass{llncs}
-\usepackage{graphicx}
 \usepackage{amsmath}
 \usepackage{amssymb}
 \usepackage{amsfonts}
@@ -14,7 +13,41 @@
 \usepackage{colortbl}
 \usepackage{bm}
 \usepackage{makecell}
+% ------------------------------------------------------------------ float placement (Session 13)
+% Every float the renderer emits is pinned with the [H] option, so it is typeset exactly where it
+% stands. float.sty is what defines H. Without it TeX treats a float as movable, which is how
+% 2005.14165's Table II was typeset on top of its Table I.
+\usepackage{graphicx}
 \usepackage{float}
+% placeins supplies \FloatBarrier, used once per document immediately before the reference list:
+% that is what stops a float being typeset between two \bibitem entries. The [section] option is
+% deliberately NOT requested - it patches \section, and acmart refuses that with
+% "An attempt to redefine \section detected". It would be redundant anyway: every float here is
+% [H], so TeX is never holding one over a section boundary in the first place.
+\IfFileExists{placeins.sty}{\usepackage{placeins}}{\providecommand{\FloatBarrier}{\clearpage}}
+% The tallest figure a page can hold. A float has no page-break inside it, so an uncapped figure
+% that scaled taller than the measure simply ran off the bottom of the page - the "some images are
+% cut down" report. totalheight (not height) only binds when the width-driven scale would overflow,
+% so a figure that already fits is untouched.
+\newcommand{\PFTFigMaxHeight}{0.82\textheight}
+% A wide table is the other half of the "overlapping" report: GPT-3's eight-column Table I is
+% typeset into a two-column IEEEtran page, and with no constraint its last column ran over the
+% facing column. \PFTTableFit shrinks a table to the measure when it is too wide and leaves it
+% untouched when it is not (adjustbox's max width never upscales). The two-step definition is
+% deliberate: a parameter token inside another macro's argument (here, a #1 within the branches of
+% \IfFileExists) is re-scanned when that argument becomes a definition and LaTeX aborts with
+% "Illegal parameter number in definition of \reserved@a", so \PFTTableFit is defined at top level
+% after the load has been tried.
+\IfFileExists{adjustbox.sty}{\usepackage{adjustbox}}{}
+\ifcsname adjustbox\endcsname
+\newcommand{\PFTTableFit}[1]{\adjustbox{max width=\linewidth}{ #1}}
+\else
+\newcommand{\PFTTableFit}[1]{ #1}
+\fi
+% T1 is what makes \TH, \DH, \L, \O and the Cyrillic author names of a real manuscript typeset.
+% OT1 (the LaTeX default, and what IEEEtran/llncs leave in place) has no slot for them and aborts:
+% "Command \TH unavailable in encoding OT1".
+\usepackage[T1]{fontenc}
 % Commands that preserved table/equation LaTeX uses but whose package a template may not load.
 % \providecommand is a no-op wherever the real package does define them (acmart loads natbib).
 \providecommand{\citep}[2][]{ \cite{ #2}}
@@ -162,7 +195,55 @@ For several kernels, the original TritonBench repository had missing call functi
 For some kernels, unit tests were written inconsistently that produced unexpected outputs. We have fixed these kernels to have consistent unit tests.
 \subsection{ROCm Triton Benchmark}
 The following kernels have been written by Triton expert engineers and released publicly to help enable the ecosystem around running AI workloads efficiently on AMD GPUs. We also took assistance from frontier LLMs to refactor these, as well as their corresponding unit tests, in the same format as the TritonBench-revised benchmark. This enables us to compare the accuracy and efficiency of our agent in a consistent manner.
-\subsection{Evaluation Metrics}
+
+\begin{table}[H]
+\centering
+\caption{List of kernels and their sources in the RoCM repositories Triton benchmark \label{tab:table} }
+\PFTTableFit{\begin{tabular}{ll}
+    \toprule
+    \cmidrule(r){1-2}
+    ROCm Kernel     & Repository link  \\
+    \midrule
+    1. test\_tma\_store\_gemm & \multirow{10}{*}{ROCm/triton }\\
+    2. moe-gemm    &\\
+    3. layernorm   &\\
+    4. triton\_multreduce\_matmul\_kernel.py &\\
+    5. multreduce\_matmul\_dot\_kernel.py    &\\
+    6. gemm       &\\
+    7. test\_block\_pointer\_matmul  &\\
+    8. test\_block\_copy     &\\
+    9. test\_add\_kernel   & \\
+    10. softmax &\\
+    \midrule
+    1. rmsnorm\_fwd   &  \multirow{5}{*}{ROCm/aiter}\\
+    2. rmsnorm\_bwd   & \\
+    3. test\_chained\_dot\_fp8 &\\
+    4. test\_matmul\_MXFP & \\
+    5. test\_gemm\_fusion & \\
+    \midrule
+    1. test\_triton\_swizzle2d  &  \multirow{4}{*}{ROCm/aotriton}\\
+    2. test\_triton\_sort &\\
+    3. test\_triton\_flip &\\
+    4. test\_reverse\_range &\\
+    \midrule
+    1. test\_load\_reduce.py & \multirow{2}{*}{ROCm/vllm} \\
+    2. test\_chained\_matmul &\\
+    \midrule
+    1. test\_random\_int & \multirow{5}{*}{ROCm/pytorch}\\
+    2. test\_randn    & \\
+    3. test\_kernel\_sub &\\
+    4. test\_kernel\_dot &\\
+    5. test\_batched\_vecmat &\\
+    \bottomrule
+    1.test\_flashattention\_fwd & \multirow{2}{*}{ROCm/xformers}\\
+    2.test\_iv\_dependent\_matmul &\\
+    \midrule
+    1.test\_gemm\_no\_scf & ROCm/bitsandbytes \\
+    \midrule
+    1.test\_cast\_matmul &ROCm/TransformerEngine \\
+    \bottomrule
+  \end{tabular}}
+\end{table}\subsection{Evaluation Metrics}
 We use the same metrics as reported in TritonBench
 \cite{li2025tritonbenchbenchmarkinglargelanguage}
 \begin{itemize}
@@ -172,9 +253,9 @@ We use the same metrics as reported in TritonBench
 \end{itemize}\section{GEAK}\subsection{Pipeline}
 As shown in Figure
 \ref{fig:geak-pipeline}
-\begin{figure}[!htbp]
+\begin{figure}[H]
 \centering
-\includegraphics[width=\linewidth]{figures/GEAK_pipeline.png}
+\includegraphics[width=\linewidth,totalheight=\PFTFigMaxHeight,keepaspectratio]{figures/GEAK_pipeline.png}
 \caption{Illustration of GEAK pipeline. \label{fig:geak-pipeline} }
 \end{figure}
 , the agentic AI system comprises four core modules: 1) Generator, 2) Reflector, 3) Evaluator, and 4) Optimizer. The Generator produces code based on user query and contextual information. The Evaluator follows a cascaded design: it first performs a functionality test to verify correctness. If the code fails this test, the corresponding error trace is fed back to the Reflector for further analysis. If the code passes, the Evaluator proceeds to assess its performance, including latency and memory efficiency. If the generated code fails to execute correctly, the Reflector analyzes both the code and the resulting error trace to identify potential issues. Finally, the Optimizer takes as input the functionally correct code and formulates strategies to enhance its performance with respect to latency and computational efficiency. To improve the performance of our agent, we employ some composable and configurable techniques as mentioned in below.
@@ -197,6 +278,35 @@ To ensure reliable kernel generation, we run multiple instances of GEAK multiple
 \section{Experiments}\subsection{Main Results}
 We first establish our baseline by directly prompting frontier LLMs, such as GPT-4.1, Gemini 2.5 Pro, and Claude 3.7 Sonnet, to produce the kernels. As shown in Table
 \ref{tab:baselines}
+\begin{table}[H]
+\centering
+\caption{Baseline Results \label{tab:baselines} }
+\PFTTableFit{\centering
+  \begin{threeparttable}
+  \begin{tabular}{llll}
+    \toprule
+    Model     & Call Accuracy (\%)     & Exec Accuracy {\%} & Speedup \\
+    \midrule
+    \multicolumn{4}{c}{TritonBench-modified benchmark}                   \\
+    \midrule
+    GPT4.1 & 14.67 / 19.02  &  8.70 / 14.13  & 0.52 / 0.53    \\
+    GPT4o     &  10.87 / 14.13  & 7.07 / 9.24 & 0.51 / 0.53      \\
+    Gemini2.5pro     & 20.65 / 21.74       & 14.13 / 16.85 & 1.33 / 0.96  \\
+    Claude 3.7  & 11.41 / 20.11 & 7.07 / 15.22 & 0.61 / 0.96 \\
+    \midrule
+    \multicolumn{4}{c}{ROCm benchmark (0-shot results only) } \\
+    \midrule
+    GPT 4.1 & 0 & 0 & 0 \\
+    Gemini-2.5 Pro & 40 & 16.66 & 0.91 \\
+    \bottomrule
+  \end{tabular}
+  
+  \begin{tablenotes}
+  \small
+\item Note:  numbers to the left of ‘/’ indicate 0-shot results and to the right are 1-shot prompting results.
+\end{tablenotes}
+  \end{threeparttable}}
+\end{table}
 , across all models, direct prompting yields low execution accuracy and suboptimal performance, indicating that even state-of-the-art LLMs struggle to produce correct and efficient low-level code without further guidance.
 
 Introducing one-shot prompting---where a single example retrieved from TritonBench trainset is provided---consistently improves both call accuracy and execution accuracy compared to zero-shot prompting. In most cases, one-shot prompting also leads to higher speedup, suggesting that the additional context helps LLMs generate more efficient kernels. However, a notable exception is observed with Gemini 2.5 Pro, where one-shot prompting results in lower speedup than direct prompting, despite improvements in accuracy.
@@ -207,8 +317,44 @@ shows the direct prompting results on the ROCm benchmark. Direct prompting with 
 
 As shown in Table
 \ref{tab:geak_on_tritonbench}
+\begin{table}[H]
+\centering
+\caption{GEAK on TritonBench-Modified Benchmark \label{tab:geak_on_tritonbench} }
+\PFTTableFit{\centering
+  \begin{threeparttable}
+  \begin{tabular}{lllll}
+    \toprule
+    Difficulty level & Correctly generated kernels & Total kernels in dataset & Exec Accuracy (\%) & Average Speedup  \\
+    \midrule
+    1 & 2 / 3 & 3 & 66.67 / 100.0 & 1.24 / 1.16 \\
+    2 & 23 / 22 & 27 & 85.19 / 81.48 & 4.78 / 1.69 \\
+    3 & 39 / 41 & 65 & 60.00 / 63.08 & 1.57 / 3.02 \\
+    4 & 32 / 34 & 84 & 38.10 / 40.48 & 2.24 / 2.86 \\
+    5 & 1 / 1 & 5 & 20.00 / 20.00 & 0.14 / 0.61 \\
+    \midrule
+    overall & 97 / 101 & 184 & 52.72 / 54.89 & 2.42 / 2.59 \\
+    \bottomrule
+  \end{tabular}
+  
+  \begin{tablenotes}
+  \small
+\item Note:  numbers to the left of ‘/’ indicate results on MI250 and to the right are results on MI300.
+\end{tablenotes}
+  \end{threeparttable}}
+\end{table}
 and Table
 \ref{tab:geak_on_rocm_mi300}
+\begin{table}[H]
+\centering
+\caption{GEAK on ROCm Benchmark \label{tab:geak_on_rocm_mi300} }
+\PFTTableFit{\begin{tabular}{lllll}
+    \toprule
+    Difficulty level & Correctly generated kernels & Total kernels in dataset & Exec Accuracy (\%) & Average Speedup  \\
+    \midrule
+    overall & 19 & 30 & 63.33 & 0.92 \\
+    \bottomrule
+  \end{tabular}}
+\end{table}
 , compared to direct LLM prompting, our system GEAK delivers significantly stronger results. On MI300, GEAK achieves 54.89\% execution accuracy and a 2.59$\times$ speedup on TritonBench-revised Benchmark, and 63.33\% execution accuracy and 0.92x speedup on ROCm Benchmark, demonstrating the effectiveness of our agent framework. We also present a case study in Appendix
 
 on $triton\_test\_flip.py$ kernel analyzing potential strategies for performance gain.
@@ -217,6 +363,37 @@ We investigate the impact of increasing inference-time compute on accuracy and p
 
 The experimental results in Table
 \ref{tab:sequential_scaling_mi250}
+\begin{table}[H]
+\centering
+\caption{Sequential Scaling of GEAK on TritonBench-Modified Benchmark on MI250 \label{tab:sequential_scaling_mi250} }
+\PFTTableFit{\begin{tabular}{llll}
+    \toprule
+    \#iterations & call acc(\%) & exec acc(\%) & speedup  \\
+    \midrule
+    iter0 & 21.2 & 13.04 & 1.02 \\
+    iter1 & 33.15 & 26.63 & \textbf{1.89} \\
+    iter2 & 41.85 & 30.98 & 1.69 \\
+    iter3 & 47.28 & 34.24 & 1.39 \\
+    iter4 & 50.54 & 37.5 & 1.39  \\
+    iter5 & 57.61 & 37.5 & 1.63 \\
+    iter6 & 50.04 & 37.5 & 1.31 \\
+    iter7 & 54.39 & 39.13 & 1.48 \\
+    iter8 & 62.5 & 40.22 & 1.67 \\
+    iter9 & 56.52 & 40.76 & 1.45 \\
+    iter10 & 62.5 & 40.22 & 1.75 \\
+    iter11 & 55.43 & 40.76 & 1.45 \\
+    iter12 & 57.07 & 42.39 & 1.16 \\
+    iter13 & 59.78 & 41.85 & 1.75 \\
+    iter14 & 61.41 & 40.76 & 1.76 \\
+    iter15 & 57.07 & 43.48 & 1.65 \\
+    iter16 & 60.33 & 42.93 & 1.57 \\
+    iter17 & 60.87 & 43.48 & 1.85 \\
+    iter18 & 61.96 & 43.48 & 1.74 \\
+    iter19 & \textbf{63.04} & \textbf{44.02} & 1.55 \\
+   
+    \bottomrule
+  \end{tabular}}
+\end{table}
 indicate that increasing the number of iterations leads to a steady improvement in both the accuracy and performance of GEAK. As the number of iterations increases, we observe a monotonic improvement in both call and execution accuracy, culminating at iter19 with 63.04\% call accuracy and 44.02\% execution accuracy---more than 3$\times$ higher than the baseline.
 
 In terms of performance, speedup improves significantly in the early iterations, with iter1 already reaching 1.89$\times$, the highest across all settings. This sharp gain is likely due to early corrections of suboptimal code generations. Although the speedup fluctuates slightly in later iterations, it consistently stays above 1.4$\times$ from iter7 onwards, suggesting that continued refinement contributes to runtime efficiency as well.
@@ -229,16 +406,16 @@ We demonstrate how increasing inference-time compute through parallel scaling im
 
 Figure
 \ref{fig:fig1}
-\begin{figure}[!htbp]
+\begin{figure}[H]
 \centering
-\includegraphics[width=\linewidth]{figures/log_linear_tritonbench_mi300.png}
+\includegraphics[width=\linewidth,totalheight=\PFTFigMaxHeight,keepaspectratio]{figures/log_linear_tritonbench_mi300.png}
 \caption{Inference time compute scaling study on TritonBench-revised benchmark. \label{fig:fig1} }
 \end{figure}
 and Figure
 \ref{fig:fig2}
-\begin{figure}[!htbp]
+\begin{figure}[H]
 \centering
-\includegraphics[width=\linewidth]{figures/log_linear_rocm_mi300.png}
+\includegraphics[width=\linewidth,totalheight=\PFTFigMaxHeight,keepaspectratio]{figures/log_linear_rocm_mi300.png}
 \caption{Inference time compute scaling study on ROCm benchmark. \label{fig:fig2} }
 \end{figure}
 show inference time scaling laws on ROCm and TritonBench-revised benchmarks, respectively. Both call and execution accuracy scale almost log-linearly with respect to the number of parallel runs,
@@ -252,9 +429,86 @@ The consistent scaling patterns across different hardware platforms demonstrate 
 The substantial improvements in Call Accuracy relative to Execution Accuracy indicate that parallel scaling particularly benefits high-level reasoning and decision-making processes. This suggests that GEAK's parallel mechanisms are especially valuable for complex inference tasks that require sophisticated logical reasoning rather than simple execution steps.
 
 Finally, the scaling characteristics support GEAK's flexible architecture design, where parallel compute resources can be dynamically allocated based on task complexity and accuracy requirements. This adaptability ensures that the framework can optimize performance across different use cases while maintaining computational efficiency.
-\subsubsection{Effect of different Modules}
+
+\begin{table}[H]
+\centering
+\caption{TritonBench-Modified Benchmark: GEAK Sequential@10 + Parallel@10 on MI250 - GPT4.1 \label{tab:parallel_scaling_tritonbench_mi250} }
+\PFTTableFit{\begin{tabular}{lll}
+    \toprule
+    Pass@K & call acc(\%) & exec acc(\%) \\
+       \midrule
+    1 & 56.52 & 40.76 \\
+    2 & 66.30 & 45.65 \\
+    3 & 72.83 & 48.91 \\
+    4 & 78.80 & 50.0 \\
+    5 & 81.52 & 50.0 \\
+    6 & 82.61 & 49.46 \\
+    7 & 85.87 & 52.17 \\
+    8 & 86.41 & 53.26 \\
+    9 & 86.41 & 53.26 \\
+   
+    \bottomrule
+  \end{tabular}}
+\end{table}
+\begin{table}[H]
+\centering
+\caption{TritonBench-Modified Benchmark: GEAK Sequential@10 + Parallel@10 on MI300 - GPT4.1 \label{tab:parallel_scaling_tritonbench_mi300} }
+\PFTTableFit{\begin{tabular}{lll}
+    \toprule
+    Pass@K & call acc(\%) & exec acc(\%) \\
+       \midrule
+    1 & 54.78 & 35.38 \\
+    2 & 71.31 & 43.95 \\
+    3 & 78.85 & 47.53 \\
+    4 & 83.13 & 49.55 \\
+    5 & 85.92 & 50.92 \\
+    6 & 87.87 & 51.96 \\
+    7 & 89.30 & 52.81 \\
+    8 & 90.37 & 53.55 \\
+    9 & 91.20 & 54.24 \\
+    10 & 91.85 & 54.89 \\
+   
+    \bottomrule
+  \end{tabular}}
+\end{table}
+\begin{table}[H]
+\centering
+\caption{ROCm Benchmark: GEAK Sequential@10 + Parallel@10 on MI300 - GPT4.1 \label{tab:parallel_scaling_rocm_mi300} }
+\PFTTableFit{\begin{tabular}{lll}
+    \toprule
+    Pass@K & call acc(\%) & exec acc(\%) \\
+       \midrule
+   1 & 43.99 & 36.00 \\
+   2 & 57.25 & 46.74 \\
+   3 & 63.77 & 51.80 \\
+   4 & 67.92 & 54.85 \\
+   5 & 70.91 & 56.99 \\
+   6 & 73.30 & 58.66 \\
+   7 & 75.33 & 60.05 \\
+   8 & 77.11 & 61.25 \\
+   9 & 78.66 & 62.33 \\
+   10 & 80.00 & 63.33 \\
+   
+    \bottomrule
+  \end{tabular}}
+\end{table}\subsubsection{Effect of different Modules}
 To assess the contribution of individual components within our agent architecture, we conducted ablation experiments by evaluating performance across various combinations of modules. Results in Table
 \ref{tab:modules_ablation}
+\begin{table}[H]
+\centering
+\caption{Modules \label{tab:modules_ablation} }
+\PFTTableFit{\begin{tabular}{llllll}
+    \toprule
+    Knowledge Injection & 1-shot & Optimizer & call acc(\%) & exec acc(\%) & speedup \\
+       \midrule
+    &  &  &  14.67 & 8.70 & 0.52\\
+    \checkmark & &  & 52.72 & 20.11 & 0.86 \\
+    \checkmark & \checkmark & & 54.35 & 27.17 & 0.99 \\
+    \checkmark & \checkmark & \checkmark & 56.52 & 40.76 & 1.45 \\
+   
+    \bottomrule
+  \end{tabular}}
+\end{table}
 show that each module---knowledge injection, one-shot, and Optimizer---contributes positively to both execution accuracy and speedup, highlighting the complementary roles these components play in enhancing the agent's overall performance.
 
 Specifically, knowledge injection alone provides a substantial lift over the baseline, improving call accuracy from 14.67\% to 52.72\% and execution accuracy from 8.70\% to 20.11\%. This underscores the critical role of prior knowledge in enabling correct kernel generation.
@@ -343,227 +597,8 @@ By combining wide coverage benchmarks with clear reporting of limitations, one c
 
 
 
-\begin{table}[!htbp]
-\centering
-\caption{List of kernels and their sources in the RoCM repositories Triton benchmark \label{tab:table} }
-\begin{tabular}{ll}
-    \toprule
-    \cmidrule(r){1-2}
-    ROCm Kernel     & Repository link  \\
-    \midrule
-    1. test\_tma\_store\_gemm & \multirow{10}{*}{ROCm/triton }\\
-    2. moe-gemm    &\\
-    3. layernorm   &\\
-    4. triton\_multreduce\_matmul\_kernel.py &\\
-    5. multreduce\_matmul\_dot\_kernel.py    &\\
-    6. gemm       &\\
-    7. test\_block\_pointer\_matmul  &\\
-    8. test\_block\_copy     &\\
-    9. test\_add\_kernel   & \\
-    10. softmax &\\
-    \midrule
-    1. rmsnorm\_fwd   &  \multirow{5}{*}{ROCm/aiter}\\
-    2. rmsnorm\_bwd   & \\
-    3. test\_chained\_dot\_fp8 &\\
-    4. test\_matmul\_MXFP & \\
-    5. test\_gemm\_fusion & \\
-    \midrule
-    1. test\_triton\_swizzle2d  &  \multirow{4}{*}{ROCm/aotriton}\\
-    2. test\_triton\_sort &\\
-    3. test\_triton\_flip &\\
-    4. test\_reverse\_range &\\
-    \midrule
-    1. test\_load\_reduce.py & \multirow{2}{*}{ROCm/vllm} \\
-    2. test\_chained\_matmul &\\
-    \midrule
-    1. test\_random\_int & \multirow{5}{*}{ROCm/pytorch}\\
-    2. test\_randn    & \\
-    3. test\_kernel\_sub &\\
-    4. test\_kernel\_dot &\\
-    5. test\_batched\_vecmat &\\
-    \bottomrule
-    1.test\_flashattention\_fwd & \multirow{2}{*}{ROCm/xformers}\\
-    2.test\_iv\_dependent\_matmul &\\
-    \midrule
-    1.test\_gemm\_no\_scf & ROCm/bitsandbytes \\
-    \midrule
-    1.test\_cast\_matmul &ROCm/TransformerEngine \\
-    \bottomrule
-  \end{tabular}
-\end{table}
-\begin{table}[!htbp]
-\centering
-\caption{Baseline Results \label{tab:baselines} }
-\centering
-  \begin{threeparttable}
-  \begin{tabular}{llll}
-    \toprule
-    Model     & Call Accuracy (\%)     & Exec Accuracy {\%} & Speedup \\
-    \midrule
-    \multicolumn{4}{c}{TritonBench-modified benchmark}                   \\
-    \midrule
-    GPT4.1 & 14.67 / 19.02  &  8.70 / 14.13  & 0.52 / 0.53    \\
-    GPT4o     &  10.87 / 14.13  & 7.07 / 9.24 & 0.51 / 0.53      \\
-    Gemini2.5pro     & 20.65 / 21.74       & 14.13 / 16.85 & 1.33 / 0.96  \\
-    Claude 3.7  & 11.41 / 20.11 & 7.07 / 15.22 & 0.61 / 0.96 \\
-    \midrule
-    \multicolumn{4}{c}{ROCm benchmark (0-shot results only) } \\
-    \midrule
-    GPT 4.1 & 0 & 0 & 0 \\
-    Gemini-2.5 Pro & 40 & 16.66 & 0.91 \\
-    \bottomrule
-  \end{tabular}
-  
-  \begin{tablenotes}
-  \small
-\item Note:  numbers to the left of ‘/’ indicate 0-shot results and to the right are 1-shot prompting results.
-\end{tablenotes}
-  \end{threeparttable}
-\end{table}
-\begin{table}[!htbp]
-\centering
-\caption{GEAK on TritonBench-Modified Benchmark \label{tab:geak_on_tritonbench} }
-\centering
-  \begin{threeparttable}
-  \begin{tabular}{lllll}
-    \toprule
-    Difficulty level & Correctly generated kernels & Total kernels in dataset & Exec Accuracy (\%) & Average Speedup  \\
-    \midrule
-    1 & 2 / 3 & 3 & 66.67 / 100.0 & 1.24 / 1.16 \\
-    2 & 23 / 22 & 27 & 85.19 / 81.48 & 4.78 / 1.69 \\
-    3 & 39 / 41 & 65 & 60.00 / 63.08 & 1.57 / 3.02 \\
-    4 & 32 / 34 & 84 & 38.10 / 40.48 & 2.24 / 2.86 \\
-    5 & 1 / 1 & 5 & 20.00 / 20.00 & 0.14 / 0.61 \\
-    \midrule
-    overall & 97 / 101 & 184 & 52.72 / 54.89 & 2.42 / 2.59 \\
-    \bottomrule
-  \end{tabular}
-  
-  \begin{tablenotes}
-  \small
-\item Note:  numbers to the left of ‘/’ indicate results on MI250 and to the right are results on MI300.
-\end{tablenotes}
-  \end{threeparttable}
-\end{table}
-\begin{table}[!htbp]
-\centering
-\caption{GEAK on ROCm Benchmark \label{tab:geak_on_rocm_mi300} }
-\begin{tabular}{lllll}
-    \toprule
-    Difficulty level & Correctly generated kernels & Total kernels in dataset & Exec Accuracy (\%) & Average Speedup  \\
-    \midrule
-    overall & 19 & 30 & 63.33 & 0.92 \\
-    \bottomrule
-  \end{tabular}
-\end{table}
-\begin{table}[!htbp]
-\centering
-\caption{Sequential Scaling of GEAK on TritonBench-Modified Benchmark on MI250 \label{tab:sequential_scaling_mi250} }
-\begin{tabular}{llll}
-    \toprule
-    \#iterations & call acc(\%) & exec acc(\%) & speedup  \\
-    \midrule
-    iter0 & 21.2 & 13.04 & 1.02 \\
-    iter1 & 33.15 & 26.63 & \textbf{1.89} \\
-    iter2 & 41.85 & 30.98 & 1.69 \\
-    iter3 & 47.28 & 34.24 & 1.39 \\
-    iter4 & 50.54 & 37.5 & 1.39  \\
-    iter5 & 57.61 & 37.5 & 1.63 \\
-    iter6 & 50.04 & 37.5 & 1.31 \\
-    iter7 & 54.39 & 39.13 & 1.48 \\
-    iter8 & 62.5 & 40.22 & 1.67 \\
-    iter9 & 56.52 & 40.76 & 1.45 \\
-    iter10 & 62.5 & 40.22 & 1.75 \\
-    iter11 & 55.43 & 40.76 & 1.45 \\
-    iter12 & 57.07 & 42.39 & 1.16 \\
-    iter13 & 59.78 & 41.85 & 1.75 \\
-    iter14 & 61.41 & 40.76 & 1.76 \\
-    iter15 & 57.07 & 43.48 & 1.65 \\
-    iter16 & 60.33 & 42.93 & 1.57 \\
-    iter17 & 60.87 & 43.48 & 1.85 \\
-    iter18 & 61.96 & 43.48 & 1.74 \\
-    iter19 & \textbf{63.04} & \textbf{44.02} & 1.55 \\
-   
-    \bottomrule
-  \end{tabular}
-\end{table}
-\begin{table}[!htbp]
-\centering
-\caption{TritonBench-Modified Benchmark: GEAK Sequential@10 + Parallel@10 on MI250 - GPT4.1 \label{tab:parallel_scaling_tritonbench_mi250} }
-\begin{tabular}{lll}
-    \toprule
-    Pass@K & call acc(\%) & exec acc(\%) \\
-       \midrule
-    1 & 56.52 & 40.76 \\
-    2 & 66.30 & 45.65 \\
-    3 & 72.83 & 48.91 \\
-    4 & 78.80 & 50.0 \\
-    5 & 81.52 & 50.0 \\
-    6 & 82.61 & 49.46 \\
-    7 & 85.87 & 52.17 \\
-    8 & 86.41 & 53.26 \\
-    9 & 86.41 & 53.26 \\
-   
-    \bottomrule
-  \end{tabular}
-\end{table}
-\begin{table}[!htbp]
-\centering
-\caption{TritonBench-Modified Benchmark: GEAK Sequential@10 + Parallel@10 on MI300 - GPT4.1 \label{tab:parallel_scaling_tritonbench_mi300} }
-\begin{tabular}{lll}
-    \toprule
-    Pass@K & call acc(\%) & exec acc(\%) \\
-       \midrule
-    1 & 54.78 & 35.38 \\
-    2 & 71.31 & 43.95 \\
-    3 & 78.85 & 47.53 \\
-    4 & 83.13 & 49.55 \\
-    5 & 85.92 & 50.92 \\
-    6 & 87.87 & 51.96 \\
-    7 & 89.30 & 52.81 \\
-    8 & 90.37 & 53.55 \\
-    9 & 91.20 & 54.24 \\
-    10 & 91.85 & 54.89 \\
-   
-    \bottomrule
-  \end{tabular}
-\end{table}
-\begin{table}[!htbp]
-\centering
-\caption{ROCm Benchmark: GEAK Sequential@10 + Parallel@10 on MI300 - GPT4.1 \label{tab:parallel_scaling_rocm_mi300} }
-\begin{tabular}{lll}
-    \toprule
-    Pass@K & call acc(\%) & exec acc(\%) \\
-       \midrule
-   1 & 43.99 & 36.00 \\
-   2 & 57.25 & 46.74 \\
-   3 & 63.77 & 51.80 \\
-   4 & 67.92 & 54.85 \\
-   5 & 70.91 & 56.99 \\
-   6 & 73.30 & 58.66 \\
-   7 & 75.33 & 60.05 \\
-   8 & 77.11 & 61.25 \\
-   9 & 78.66 & 62.33 \\
-   10 & 80.00 & 63.33 \\
-   
-    \bottomrule
-  \end{tabular}
-\end{table}
-\begin{table}[!htbp]
-\centering
-\caption{Modules \label{tab:modules_ablation} }
-\begin{tabular}{llllll}
-    \toprule
-    Knowledge Injection & 1-shot & Optimizer & call acc(\%) & exec acc(\%) & speedup \\
-       \midrule
-    &  &  &  14.67 & 8.70 & 0.52\\
-    \checkmark & &  & 52.72 & 20.11 & 0.86 \\
-    \checkmark & \checkmark & & 54.35 & 27.17 & 0.99 \\
-    \checkmark & \checkmark & \checkmark & 56.52 & 40.76 & 1.45 \\
-   
-    \bottomrule
-  \end{tabular}
-\end{table}
+% Nothing may be typeset after the references start: this flushes every float still queued.
+\FloatBarrier
 
 \bibliographystyle{splncs04}
 \begin{thebibliography}{99}

@@ -61,6 +61,93 @@ def protect_tex(s):
     return _PROTECT_RE.sub(lambda g: BS + g.group(1), str(s))
 
 
+# ----------------------------------------------------------------- layout-artifact scrub (Session 13)
+# Session 12's scrubber lived only inside ``sir_extractor.text_with_math()``, which left two gaps.
+# (1) Coverage: an author name, a keyword, a reference string, a preserved table body and a
+# paper-local macro never pass through it, so a dump sitting in any of those reached the PDF.
+# (2) Form: it demanded two or more coordinate quadruples, so a lone ``text[[78, 726, 489, 905]]``
+# survived it. Both are closed here, on the renderer's way out, so the artifact cannot be printed
+# whatever produced the SIR. A quadruple is four plain comma-separated numbers - enough to tell a
+# coordinate dump from the interval notation ``[[0, 4]]`` and the padding spec
+# ``[[0,0],[0,0],[0,pad\_len],[0,0]]`` that real papers write in math.
+_NUM = r"-?\d+(?:\.\d+)?"
+_QUAD = r"\[\s*" + _NUM + r"(?:\s*,\s*" + _NUM + r"){3}\s*\]"
+_BBOX_BODY = r"\[\s*" + _QUAD + r"(?:\s*,\s*" + _QUAD + r")*\s*\]"
+# Text-mode fields: the bare [[...]] form is scrubbed too, because a field that holds prose has no
+# legitimate double-bracket quadruple in it. The \todo branch is tried first so its braces go with
+# it; latex_to_text() has already dropped the control sequence in most sources, which the second
+# branch then catches.
+_DUMP = (r"(?:\\?text\s*)?\[\s*" + _QUAD + r"(?:\s*,\s*" + _QUAD + r")*\s*\]"
+         r"(?:\s*\})?")
+BBOX_ARTIFACT_RE = re.compile(r"\\todo\s*(?:\[[^\]]*\])?\s*\{\s*" + _DUMP + r"\s*\}" + r"|" + _DUMP)
+# Verbatim LaTeX (table bodies, equations, macros): only the marked forms, so an author's own
+# [[1,2,3,4]] inside a tabular cannot be eaten. The \todo branch takes its closing brace too, which
+# is what \todo{[[...]]} expands to in the nips/neurips styles.
+BBOX_MARKED_RE = re.compile(r"\\todo\s*(?:\[[^\]]*\])?\s*\{\s*" + _BBOX_BODY + r"\s*\}"
+                            r"|(?:\\?text)\s*" + _BBOX_BODY)
+
+
+def strip_bbox(s, marked_only=False):
+    """Drop bounding-box dumps that leaked out of a layout tool into the manuscript."""
+    if not s or "[[" not in s:
+        return s
+    return (BBOX_MARKED_RE if marked_only else BBOX_ARTIFACT_RE).sub(" ", str(s))
+
+
+# ----------------------------------------------------------------- CJK / combining marks (Session 13)
+# 2501.12948 (DeepSeek-R1) deposits Chinese text in its source. None of the three target classes
+# loads a CJK package, so every ideograph is a "Unicode character 请 (U+8BF7) not available" hard
+# error: 869 of them and no PDF. Replacing each run with one visible [CJK] marker keeps the
+# document compiling, keeps the surrounding Latin intact, and tells the reader what is missing.
+# Fullwidth ASCII (U+FF01-U+FF5E) folds to its plain equivalent instead, which is what it means.
+_CJK_RANGES = ((0x2E80, 0x2EFF), (0x3000, 0x303F), (0x3040, 0x30FF), (0x3400, 0x4DBF),
+               (0x4E00, 0x9FFF), (0xF900, 0xFAFF), (0xFF66, 0xFFDC), (0x20000, 0x2FA1F))
+_COMBINING = (0x0300, 0x036F)
+
+
+def _is_cjk(ch):
+    o = ord(ch)
+    return any(a <= o <= b for a, b in _CJK_RANGES)
+
+
+def fold_cjk(s):
+    """Fullwidth ASCII -> ASCII, combining marks -> dropped, CJK runs -> one ``[CJK]`` marker."""
+    if not s:
+        return ""
+    out = []
+    for ch in str(s):
+        o = ord(ch)
+        if 0xFF01 <= o <= 0xFF5E:
+            out.append(chr(o - 0xFEE0))
+        elif _COMBINING[0] <= o <= _COMBINING[1]:
+            continue
+        elif _is_cjk(ch):
+            if not out or out[-1] != "[CJK]":
+                out.append("[CJK]")
+        else:
+            out.append(ch)
+    return "".join(out)
+
+
+def strip_cjk(s):
+    """``fold_cjk`` plus the count of characters it replaced, for the warning."""
+    if not s:
+        return "", 0
+    text = str(s)
+    folded = fold_cjk(text)
+    if folded == text:
+        return text, 0
+    return folded, sum(1 for ch in text if _is_cjk(ch) or 0xFF01 <= ord(ch) <= 0xFF5E
+                       or _COMBINING[0] <= ord(ch) <= _COMBINING[1])
+
+
+# ``deepseek``/``ctexart`` wrap CJK in a CJK* environment whose body is the text itself. The
+# environment cannot survive a class that does not define it, so it is unwrapped and its contents
+# go through the same fold.
+_CJK_ENV_RE = re.compile(r"\\begin\s*\{CJK\*?\}(?:\s*\[[^\]]*\])?\s*\{[^{}]*\}?"
+                         r"|(?:\s*\\end\s*\{CJK\*?\})")
+
+
 # pylatexenc turns \bullet into ∙ and \in into ∈ *outside* math too (inside $...$ Session 9's
 # math_spans already restored the raw LaTeX). protect_tex() only knows the five catcode
 # characters, so a bare ∙ reached pdflatex and aborted 1709.08492 with "Unicode character ∙
@@ -126,8 +213,14 @@ def escape_unicode(text):
 
 
 def protect_tex_unicode(s):
-    """protect_tex + escape_unicode, for text-mode fields that carry no math_spans."""
-    return escape_unicode(protect_tex(s))
+    """The one text-mode choke point: scrub, fold, escape, then map Unicode.
+
+    Every prose field in every template reaches the PDF through here (directly, or as the
+    placeholder-free part of ``render_with_math``), which is what makes the Session 13 scrub a
+    class fix rather than a per-field patch: author names, keywords, headings, captions, list items,
+    reference strings and abstracts are all covered by one call site.
+    """
+    return escape_unicode(protect_tex(fold_cjk(strip_bbox(s))))
 
 
 # protect_tex() escapes the "_" inside «MATH_<i>» as "\_", so the pattern must accept both forms.
@@ -293,46 +386,67 @@ def graphic_path(s):
     """\\includegraphics target: whitespace and braces break it, so normalise and flag it."""
     p = str(s or "").strip().strip("{}")
     p = p.replace(BS + BS, "").strip()
-    return p
+    return strip_bbox(p)
 
 
-def placement(value, default="!htbp"):
-    """A float placement argument, limited to the characters TeX accepts.
+# Session 12 forwarded the source's own placement hint ([t], [b!], [!htbp]) and then anchored the
+# float at its citation. Anchoring moved the *source* of the float but TeX was still free to move
+# the box, so on 2005.14165 Table II was typeset on top of Table I and the floats that the
+# citation walk could not anchor piled up after the last section. ``[H]`` (float.sty, loaded by all
+# three templates) is what "in the sequence of the given paper" requires: the float is typeset
+# exactly where it is written and cannot be deferred.
+FLOAT_PLACEMENT = "H"
 
-    The templates used to run placement through ``citekey`` (a \\ref-argument sanitiser) or ignore
-    it; only this whitelist keeps ``!htbp``/``H`` intact and turns anything else into the default.
+
+def float_width(fmt, span=False):
+    r"""The width a float's content is typeset at, per class.
+
+    IEEEtran is two-column, so an ordinary figure takes ``\columnwidth`` and only a figure the
+    source declared as ``figure*``/``table*`` (``span``) may take ``\textwidth``; giving every float
+    ``\linewidth`` is what squeezed GPT-3's full-width plots into one column. acmart and LNCS bodies
+    are set in one column, where ``\linewidth`` is the measure.
     """
-    kept = _PLACEMENT_BAD_RE.sub("", str(value or ""))
-    return kept or default
+    if fmt == "ieee":
+        return BS + "textwidth" if span else BS + "columnwidth"
+    return BS + "linewidth"
 
 
 def anchor_floats(sections, figures, tables):
-    """Emit each labelled float just after the first block that references it.
+    """Emit every float at the place in the body where the paper put it.
 
     ``render_floats`` used to place every figure and table of the paper in one block after the last
     section, so Figure 1 of 1706.03762 - referenced on page 2 - was typeset on page 5. The SIR keeps
     an inline ``figure_ref``/``table_ref`` block with the target label wherever the body cites a
-    float, so the reference order is available without touching the schema: this only moves where a
-    float is emitted. Nothing is added, dropped or reworded.
+    float, so a cited float's position is available without touching the schema.
 
     Floats of a kind are still *emitted* in declaration order, because that is what numbers them:
     anchoring each one at its own first reference renumbered 1706.03762's tables (its Table III is
     cited in the body before its Table I, so a naive anchor made "Variations…" Table I). Each float
-    goes at max(its first reference, the position the previous float of that kind took), and a float
-    with no in-text reference - plus every float declared after it - stays in the pending tail.
+    goes at max(its own anchor, the position the previous float of that kind took).
+
+    Session 13 replaced the one rule that broke this on real papers: a float with no in-text
+    reference used to set ``tail_only``, which deferred **every later float of that kind** to the
+    trailing pile. 2005.14165 cites only 35 of its 110 floats, so 102 of them arrived after the last
+    section (report Step 0). An unanchored float now falls back to where it was declared -
+    ``figures[i]["section"]`` is the ordinal of the source section that held the environment - and
+    only a float whose declaration section is unknown still goes to the tail.
     """
     anchor_at = {}                                # label -> flat block index of first citation
     for n, block in enumerate(_flat_blocks(sections)):
         if isinstance(block, dict) and block.get("type") in ("figure_ref", "table_ref"):
             anchor_at.setdefault(str(block.get("label") or ""), n)
+    section_end = _section_end_positions(sections)
 
     def plan(items):
-        anchored, pending, last, tail_only = [], [], -1, False
+        anchored, pending, last = [], [], -1
         for item in items or []:
             label = str(item.get("label") or "") if isinstance(item, dict) else ""
-            pos = None if tail_only or not label else anchor_at.get(label)
+            pos = anchor_at.get(label)
             if pos is None:
-                tail_only = True
+                sec = item.get("section") if isinstance(item, dict) else None
+                if isinstance(sec, int) and 0 <= sec < len(section_end):
+                    pos = section_end[sec]
+            if pos is None:
                 pending.append(item)
                 continue
             last = max(pos, last)
@@ -357,6 +471,20 @@ def anchor_floats(sections, figures, tables):
         section["blocks"] = blocks
         out.append(section)
     return out, pending_figures, pending_tables
+
+
+def _section_end_positions(sections):
+    """Flat block index of each section's last block: the declaration anchor ``anchor_floats`` uses.
+
+    Index i is section i, including the level-0 lead-in, because the extractor emits sections in
+    document order and records the ordinal each float was declared in.
+    """
+    ends, n = [], -1
+    for section in sections or []:
+        blocks = section.get("blocks") or [] if isinstance(section, dict) else []
+        n += len(blocks)
+        ends.append(n)
+    return ends
 
 
 def _flat_blocks(sections):
@@ -387,7 +515,6 @@ _MACRO_DEF_NAME_RE = re.compile(
 # Colours are referenced by bare name (\cellcolor{ColorHigh}), so the \name test in select_macros
 # can never see them used; they are matched and kept separately.
 _DEFINECOLOR_RE = re.compile(r"^\\definecolor\s*\{\s*([^{}]+?)\s*\}")
-_PLACEMENT_BAD_RE = re.compile(r"[^!hptbHm]")
 _WALK_SKIP_KEYS = {"macros", "source", "extracted_at", "schema_version", "paper_id",
                    "source_format", "parse_warnings"}
 
@@ -454,6 +581,12 @@ def unbalanced_spans(sir):
     return count
 
 
+def cjk_total(sir):
+    """How many non-Latin characters the prose fold will replace, for the parse warning."""
+    return sum(1 for s in _sir_strings(sir) for ch in s
+               if _is_cjk(ch) or 0xFF01 <= ord(ch) <= 0xFF5E or _COMBINING[0] <= ord(ch) <= _COMBINING[1])
+
+
 def unmapped_unicode(sir):
     """Characters this renderer would leave untouched: non-ASCII, not in the map, not a sentinel.
 
@@ -466,6 +599,80 @@ def unmapped_unicode(sir):
             if ord(ch) > 127 and ch not in UNICODE_MATH_MAP and ch not in "«»":
                 found.add(ch)
     return sorted(found)
+
+
+def sanitize_verbatim(latex):
+    r"""Scrub layout dumps and CJK from a field the renderer emits byte-for-byte.
+
+    A table body, an equation and a preserved macro are LaTeX that must not be re-escaped, so the
+    text-mode choke point in ``protect_tex_unicode`` never sees them. Two things are taken out and
+    nothing else: a *marked* coordinate dump (``text[[...]]`` or ``\todo{[[...]]}``) and a CJK*
+    environment wrapper, whose contents are folded to a marker. A bare ``[[1,2,3,4]]`` survives,
+    because inside a tabular that is a matrix and not a dump.
+    """
+    if not latex:
+        return ""
+    s = _CJK_ENV_RE.sub(" ", str(latex))
+    return fold_cjk(strip_bbox(s, marked_only=True))
+
+
+_VERBATIM_KEYS = ("latex",)
+
+
+def sanitize_sir_verbatim(sir):
+    """Apply :func:`sanitize_verbatim` to every verbatim LaTeX field in one SIR, in place.
+
+    Returns ``(bbox_dumps, cjk_chars)`` so the caller can report what it removed.
+    """
+    dumps, cjk = 0, 0
+    stack = [sir]
+    while stack:
+        node = stack.pop()
+        if isinstance(node, dict):
+            for k, v in list(node.items()):
+                if k in _VERBATIM_KEYS and isinstance(v, str):
+                    fixed = sanitize_verbatim(v)
+                    if fixed != v:
+                        dumps += len(BBOX_MARKED_RE.findall(v))
+                        cjk += sum(1 for ch in v if _is_cjk(ch) or _COMBINING[0] <= ord(ch)
+                                   <= _COMBINING[1] or 0xFF01 <= ord(ch) <= 0xFF5E)
+                        node[k] = fixed
+                elif k == "macros" and isinstance(v, list):
+                    node[k] = [sanitize_verbatim(m) if isinstance(m, str) else m for m in v]
+                else:
+                    stack.append(v)
+        elif isinstance(node, list):
+            stack.extend(node)
+    return dumps, cjk
+
+
+_MACRO_ONE_ARG_DEF_RE = re.compile(
+    r"^\\(?:providecommand|newcommand|renewcommand|def)\s*\{?\s*(\\[A-Za-z@]+)\s*\}?\s*\[1\]")
+_DUMP_SHAPED_BODY_RE = re.compile(r"\[\[\s*#1\s*\]\]")
+
+
+def neutralise_dump_macros(definitions):
+    r"""Redefine a preserved one-argument macro whose body wraps its argument in [[..]].
+
+    1706.03762's source defines ``\providecommand{\todo}[1]{\textcolor{red}{[[#1]]}}`` and the SIR
+    preserves it verbatim, so every ``\todo`` call in the body would print its own coordinate-style
+    marker in the rebuilt PDF. Scrubbing text cannot help - the brackets come from the definition,
+    not from the argument - and that is the leak tmp/s13/bbox_class_proof.py found. The macro is
+    replaced by one that discards its argument, which is also what the source's own
+    ``\usepackage[disable]{todonotes}`` asks for.
+
+    The trade-off is stated rather than hidden: a macro that legitimately renders a closed interval
+    as ``[[#1]]`` would lose its brackets too. Numbers and text survive; only the doubling does.
+    """
+    out = []
+    for d in definitions or []:
+        if isinstance(d, str) and "[[" in d and _DUMP_SHAPED_BODY_RE.search(d):
+            m = _MACRO_ONE_ARG_DEF_RE.match(d.strip())
+            if m:
+                out.append("\\providecommand{" + m.group(1) + "}[1]{}")
+                continue
+        out.append(d)
+    return out
 
 
 def select_macros(definitions, sir):
@@ -522,14 +729,20 @@ def _env(templates_dir=None):
     ed.filters["texu"] = protect_tex_unicode
     ed.filters["citekey"] = citekey
     ed.filters["graphpath"] = graphic_path
-    ed.filters["placement"] = placement
     ed.globals["insert_label"] = insert_label
     ed.globals["render_with_math"] = render_with_math
+    ed.globals["float_width"] = float_width
+    ed.globals["FLOAT_PLACEMENT"] = FLOAT_PLACEMENT
     return ed
 
 
 def build_context(sir, fmt, warnings):
     """Normalise one SIR into the template variables, collecting warnings instead of crashing."""
+    dumps, verbatim_cjk = sanitize_sir_verbatim(sir)
+    if dumps:
+        warnings.append(f"{dumps} bounding-box coordinate dump(s) removed from verbatim LaTeX")
+    if verbatim_cjk:
+        warnings.append(f"{verbatim_cjk} CJK character(s) in verbatim LaTeX replaced by [CJK]")
     md = dict(sir.get("metadata") or {})
     title = (md.get("title") or "").strip()
     if not title:
@@ -566,6 +779,11 @@ def build_context(sir, fmt, warnings):
         more = "" if len(leftover) <= 12 else f" (+{len(leftover) - 12} more)"
         warnings.append(f"{len(leftover)} non-ASCII character(s) left as-is by UNICODE_MATH_MAP: "
                         f"{shown}{more}")
+    cjk = cjk_total(sir)
+    if cjk:
+        warnings.append(f"{cjk} CJK or combining character(s) in the source: the target classes "
+                        f"load no CJK package, so they are folded to [CJK] markers and the output "
+                        f"is incomplete for the non-Latin parts")
     return {
         "metadata": {"title": title, "authors": authors, "abstract": abstract,
                      "abstract_math_spans": md.get("abstract_math_spans") or [],
@@ -577,7 +795,7 @@ def build_context(sir, fmt, warnings):
         "pending_tables": pending_tables,
         "equations": sir.get("equations") or [],
         "references": refs,
-        "macros": select_macros(sir.get("macros") or [], sir),
+        "macros": neutralise_dump_macros(select_macros(sir.get("macros") or [], sir)),
         "format": fmt,
         "paper_id": sir.get("paper_id") or "",
     }

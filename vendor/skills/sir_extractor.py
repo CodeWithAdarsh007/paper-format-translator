@@ -66,6 +66,10 @@ MATH_ENVS = {"equation", "equation*", "align", "align*", "eqnarray", "eqnarray*"
              "displaymath", "math"}
 LIST_ENVS = {"itemize": "itemize", "enumerate": "enumerate", "description": "itemize"}
 FIGURE_ENVS = {"figure", "figure*", "wrapfigure", "float", "sidewaysfigure"}
+# The subset that spans the page rather than one column. IEEEtran is two-column, so the renderer
+# typesets these at \textwidth and everything else at \columnwidth (Session 13, Step A2).
+# wrapfigure is deliberately not one of them: it sits *inside* the text flow of a single column.
+SPANNING_FLOAT_ENVS = {"figure*", "sidewaysfigure", "table*"}
 # Environments whose content *is* the tabular: they carry \begin/\end themselves and must be
 # captured whole. Before Session 9.6 only the float names were listed, so a bare \begin{tabular}
 # was recursed into as prose ("lrr Model EN-DE FLOPs ..." as one paragraph) and a longtable was
@@ -320,11 +324,22 @@ def extract_math_spans(text: str, warnings: list = None):
 # a todo marker, a PDF-coordinate dump pasted into the source -- survives latex_to_text(), which
 # strips the control sequence but keeps the argument. Emitting it puts literal
 # "[[76, 877, 488, 906], [506, 182, 918, 211]]" in the PDF, so it is scrubbed from every field
-# that goes through text_with_math(). Two or more integer quadruples are required, which no
-# legitimate prose or math text matches.
-_BBOX_ARTIFACT_RE = re.compile(
-    r"(?:text)?\[" + r"\s*\[" + r"\s*-?\d+(?:\.\d+)?" + r"(?:\s*,\s*-?\d+(?:\.\d+)?){3}" + r"\s*\]"
-    + r"(?:" + r"\s*,\s*\[" + r"\s*-?\d+(?:\.\d+)?" + r"(?:\s*,\s*-?\d+(?:\.\d+)?){3}" + r"\s*\])+" + r"\s*\]")
+# that goes through text_with_math().
+#
+# Session 13: the pattern is deliberately a copy of renderer.BBOX_ARTIFACT_RE rather than an import.
+# The two ends have to agree, and test_renderer.py::test_scrubbers_agree_at_both_ends asserts that
+# they do; importing was not an option because the test suite loads this file by path while
+# `renderer` may already be bound to the app's vendored copy. The old local version demanded *two
+# or more* quadruples, so a single "text[[78, 726, 489, 905]]" survived it, and it only ever ran on
+# the way in -- author names, keywords, reference strings and preserved macros never passed through
+# it at all. renderer.py now scrubs on the way out too, at the one choke point every text field
+# reaches, which is the half that actually closes the class.
+_NUM_RE = r"-?\d+(?:\.\d+)?"
+_QUAD_RE = r"\[\s*" + _NUM_RE + r"(?:\s*,\s*" + _NUM_RE + r"){3}\s*\]"
+_DUMP_RE = (r"(?:\\?text\s*)?\[\s*" + _QUAD_RE + r"(?:\s*,\s*" + _QUAD_RE + r")*\s*\]"
+            r"(?:\s*\})?")
+_BBOX_ARTIFACT_RE = re.compile(r"\\todo\s*(?:\[[^\]]*\])?\s*\{\s*" + _DUMP_RE + r"\s*\}"
+                               + r"|" + _DUMP_RE)
 
 
 def scrub_layout_artifacts(s: str) -> str:
@@ -878,6 +893,23 @@ def find_authors(text: str):
     return [], None
 
 
+def pdfinfo_fields(text: str):
+    r"""``\hypersetup{pdfinfo={Title={..}, Author={..}}}`` -> {field: value}.
+
+    A `pdfpages` wrapper such as 1412.6980 deposits no ``\title``/``\author`` at all: the manuscript
+    is an included PDF and its metadata lives here. Those strings are the paper's own, so reading
+    them beats rendering "Untitled".
+    """
+    out = {}
+    for m in re.finditer(r"pdfinfo\s*=\s*\{", text):
+        inner, _ = match_braces(text, m.end() - 1)
+        for fm in re.finditer(r"\\?([A-Z][A-Za-z]*)\s*=\s*\{", inner):
+            val, _ = match_braces(inner, fm.end() - 1)
+            if val.strip():
+                out.setdefault(fm.group(1), val.strip())
+    return out
+
+
 def extract_metadata(preamble: str, body: str, warnings: list):
     """Title/authors/abstract/keywords, searched in the preamble first then the body.
 
@@ -890,13 +922,23 @@ def extract_metadata(preamble: str, body: str, warnings: list):
           "author_macro": None}
     srcs = [s for s in (preamble, body) if s]
     md["title"], md["title_macro"] = find_title(srcs)
-    if not md["title"]:
-        warnings.append("no \\title found")
     for src in srcs:
         got, macro = find_authors(src)
         if got:
             md["authors"], md["author_macro"] = got, macro
             break
+    if not md["title"] or not md["authors"]:
+        info = pdfinfo_fields(preamble + "\n" + body)
+        if not md["title"] and info.get("Title"):
+            md["title"] = norm_ws(latex_to_text(info["Title"]))
+            warnings.append("title taken from \\hypersetup pdfinfo (no \\title in the source)")
+        if not md["authors"] and info.get("Author"):
+            md["authors"] = [{"name": norm_ws(latex_to_text(a)), "affiliation": None,
+                              "email": None}
+                             for a in split_top_level(info["Author"], r",") if a.strip()]
+            warnings.append("authors taken from \\hypersetup pdfinfo (no \\author in the source)")
+    if not md["title"]:
+        warnings.append("no \\title found")
     if not md["authors"]:
         warnings.append("no \\author found")
     ab = re.search(r"\\begin\s*\{abstract\}(.*?)\\end\s*\{abstract\}", body, re.S)
@@ -1451,12 +1493,18 @@ def scan_blocks(text: str, ctx: dict, depth: int = 0):
             elif env in FIGURE_ENVS:
                 f = parse_figure(inner, ctx["warnings"])
                 if f["label"] or f["caption"]:
+                    f["section"] = ctx.get("section_index")
+                    # figure*/sidewaysfigure span the whole page, not one column: the IEEE renderer
+                    # needs that to choose \textwidth over \columnwidth (Step A2).
+                    f["span"] = env in SPANNING_FLOAT_ENVS
                     ctx["figures"].append(f)
                     if f["label"]:
                         ctx["labels"].setdefault(f["label"], f["caption"] or "")
             elif env in TABLE_ENVS:
                 t = parse_table(inner, ctx["warnings"], env=env, whole=text[start:end])
                 if t["label"] or t["caption"] or t["latex"]:
+                    t["section"] = ctx.get("section_index")
+                    t["span"] = env in SPANNING_FLOAT_ENVS
                     ctx["tables"].append(t)
                     if t["label"]:
                         ctx["labels"].setdefault(t["label"], t["caption"] or "")
@@ -1632,6 +1680,9 @@ def build_sections(body: str, ctx: dict):
             break
         name = re.match(r"\\(\w+)", m.group(0)).group(1)
         inner, after = match_braces(body, m.end() - 1)
+        # Which section a float was declared in is the anchor renderer.anchor_floats() falls back to
+        # when the body never cites it, so the ordinal has to be in ctx before the region is scanned.
+        ctx["section_index"] = len(sections)
         cur["blocks"].extend(scan_blocks(body[pos:m.start()], ctx))
         if cur["blocks"] or cur["heading"] is not None:
             sections.append(cur)
@@ -1641,6 +1692,7 @@ def build_sections(body: str, ctx: dict):
         if heading_spans:
             cur["math_spans"] = heading_spans
         pos = after
+    ctx["section_index"] = len(sections)
     cur["blocks"].extend(scan_blocks(body[pos:], ctx))
     if cur["blocks"] or cur["heading"] is not None or not sections:
         sections.append(cur)
@@ -1721,12 +1773,30 @@ def extract_sir(input_path: str, source_format: str = "original", papers_root: s
             sir["paper_id"] = pid
             sir["counts"] = _counts(sir)
             return sir
+        # Some arXiv deposits are the compiled PDF itself (1602.03837 is 935 kB of %PDF-1.4 served
+        # as main.tex). Parsing it as LaTeX produced 101 errors from PDF object names such as \TH
+        # and a PDF of the wrong paper at the end of it; the honest answer is that there is no
+        # manuscript text here, so the app reports that instead of compiling garbage.
+        if raw.lstrip()[:5] == "%PDF-":
+            warnings.append("this arXiv source is a compiled PDF rather than LaTeX - the paper's "
+                            "source was never deposited, so there is no manuscript text to "
+                            "reformat (upload the .tex or try another paper)")
+            sir["paper_id"] = pid
+            sir["counts"] = _counts(sir)
+            return sir
         if len(raw) > MAX_TEXT_BYTES:
             warnings.append(f"main file truncated at {MAX_TEXT_BYTES} bytes")
             raw = raw[:MAX_TEXT_BYTES]
 
         stripped = strip_comments(raw)
         full = inline_includes(stripped, os.path.dirname(main), roots, warnings)
+        # A pdfpages wrapper (1412.6980) says "the paper is in 0_adam_main.pdf". Nothing in the
+        # .tex can recover those pages, so the outcome must be reported rather than looked like a
+        # renderer bug: one page of front matter and no body.
+        if re.search(r"\\includepdf\s*(?:\[[^\]]*\])?\s*\{", full):
+            warnings.append("the source includes its own PDF via \\includepdf (pdfpages): the "
+                            "manuscript body was never deposited as LaTeX, so only the front "
+                            "matter and any LaTeX around the include can be reformatted")
 
         m = re.search(r"\\begin\s*\{document\}", full)
         if m:
