@@ -87,18 +87,23 @@ SKIP_ENVS = {"abstract", "thebibliography"}          # consumed by metadata / re
 # Drawing instructions, not prose. Recursing into them turns diagram labels ("π_PC") into Unicode
 # text outside math; the templates do not load tikz, so the diagram cannot be reproduced anyway.
 DIAGRAM_ENVS = {"tikzcd", "tikzpicture", "pgfpicture", "pspicture", "picture"}
+# Environments whose mandatory arguments belong to the *tag*, not to the body.
+_ARGFUL_ENVS = {"cjk", "cjk*", "lrbox", "multicols", "filecontents", "filecontents*"}
+# ``\appendix`` is *structure*, not noise: it is the only thing that tells the target class to
+# letter the sections that follow. Deleting it (Session 13 and earlier) made GPT-3's appendices
+# A-H continue the body's numbering, so the reader saw "XVI. ADDITIONAL SAMPLES FROM GPT-3".
+_APPENDIX_RE = re.compile(r"(?<!\\)\\appendix\b")
 NOISE_COMMANDS = (
     r"\\maketitle\b", r"\\tableofcontents\b", r"\\bibliographystyle\s*\{[^{}]*\}",
     r"\\bibliography\s*\{[^{}]*\}", r"\\addcontentsline\s*\{[^{}]*\}(?:\s*\{[^{}]*\}){2}",
-    r"\\appendix\b", r"\\clearpage\b", r"\\newpage\b", r"\\pagebreak\b", r"\\pagenumbering\s*\{[^{}]*\}",
+    r"\\clearpage\b", r"\\newpage\b", r"\\pagebreak\b", r"\\pagenumbering\s*\{[^{}]*\}",
     r"\\thispagestyle\s*\{[^{}]*\}", r"\\markboth\s*\{(?:[^{}]|\{[^{}]*\})*\}\s*\{(?:[^{}]|\{[^{}]*\})*\}",
     r"\\setcounter\s*\{[^{}]*\}\s*\{[^{}]*\}", r"\\hyphenation\s*\{[^{}]*\}",
 )
 _CITE_RE = re.compile(
-    r"\\(?:nocite|cite|Cite|citet|citet|citep|citealp|citeauthor|citeyear|citelist|textcite|"
-    r"parencite|autocite|footcite|smartcite|poscite|citename)\*?\b"
+    r"\\(?:[A-Za-z]*[Cc]it[A-Za-z]*|apud|apudcn|apudnn|nocite)\*?(?![A-Za-z])"
 )
-_REF_RE = re.compile(r"\\(?:cpageref|Cref|cref|autoref|nameref|eqref|refrange|ref)\*?\b")
+_REF_RE = re.compile(r"\\(?:cpageref|Cref|cref|autoref|nameref|eqref|refrange|vref|pageref|ref)\*?\b")
 _ENV_BEGIN_RE = re.compile(r"\\begin\s*\{([^}]*)\}")
 _LABEL_RE = re.compile(r"\\label\s*\{([^{}]*)\}")
 _DISPLAY_MATH_RE = re.compile(r"(?<!\\)\\\[(.+?)(?<!\\)\\\]", re.S)
@@ -113,6 +118,29 @@ _TEX_ID_RE = re.compile(r"^\d{4}\.\d{4,5}(v\d+)?$")
 # the text converter nor the renderer's escaper touches them.
 MATH_PLACEHOLDER = "«MATH_{i}»"
 MATH_PLACEHOLDER_RE = re.compile(r"«MATH_\d+»")
+
+# ---- citation/reference preservation (Session 14A-1, Step D) -----------------------------------
+# pylatexenc's own text converter rewrites ``\cite{...}`` to the literal string ``<cit.>``,
+# ``\ref``/``\autoref`` to ``<ref>`` and ``\Cref`` to ``<Ref>``. Because ``latex_to_text`` runs on
+# captions, list items and headings, those placeholders were stored *in the SIR* and printed into
+# the reader's PDF (42 ``<cit.>`` and 32 ``<ref>``/``<Ref>`` across the five audited papers). The
+# macros are lifted out before conversion, exactly the way math spans are, and put back as
+# canonical LaTeX at render time.
+XREF_PLACEHOLDER = "«XREF_{i}»"
+XREF_PLACEHOLDER_RE = re.compile(r"«XREF_\d+»")
+_XREF_MACRO_RE = re.compile(
+    r"\\(?:[A-Za-z]*[Cc]it[A-Za-z]*|apud|apudcn|apudnn|nocite"
+    r"|cpageref|Cref|cref|autoref|nameref|eqref|refrange|vref|pageref|ref)\*?(?![A-Za-z])")
+# ``\Cref``/``\autoref`` print the type word themselves; the target classes load no cleveref, so
+# the word is reconstructed from the label's own prefix when the sentence does not already say it.
+_LABEL_PREFIX_WORD = (("tab", "Table"), ("fig", "Figure"), ("sec", "Section"),
+                      ("subsec", "Section"), ("app", "Appendix"), ("eqn", "Equation"),
+                      ("eq", "Equation"), ("alg", "Algorithm"), ("thm", "Theorem"),
+                      ("listing", "Listing"), ("lst", "Listing"))
+_TYPE_WORD_BEFORE_RE = re.compile(
+    r"(?:Fig(?:ure)?\.?|Tab(?:le)?\.?|Sec(?:tion)?\.?|Appendi[xc]|Eq(?:uation)?\.?|"
+    r"List(?:ing)?\.?|Th(?:m|m|eorem)|Algor(?:ithm)?)[~ ]*$", re.I)
+
 # Order matters: $$ before $, and \ensuremath is handled separately because its argument is
 # brace-delimited rather than pattern-delimited.
 INLINE_MATH_PATTERNS = (
@@ -349,11 +377,207 @@ def scrub_layout_artifacts(s: str) -> str:
     return norm_ws(_BBOX_ARTIFACT_RE.sub(" ", s))
 
 
+def _read_xref_args(text: str, pos: int):
+    """``(optional_args, brace_args, index_after_last_argument)`` for a macro's argument group.
+
+    The returned index never includes trailing whitespace: dropping a macro must not also drop the
+    space that separated it from the next word (that is what glued ``.../evals`` to ``here``).
+    """
+    opts, braces = [], []
+    i, consumed = pos, pos
+    while i < len(text):
+        j = _skip_ws(text, i)
+        if j >= len(text):
+            break
+        if text[j] == "[":
+            k = text.find("]", j)
+            if k < 0:
+                break
+            opts.append(text[j + 1:k].strip())
+            i = consumed = k + 1
+            continue
+        if text[j] == "{":
+            inner, i = match_braces(text, j)
+            braces.append(inner)
+            consumed = i
+            continue
+        break
+    return opts, braces, consumed
+
+
+def _label_type_word(label: str) -> str:
+    """The word ``\\Cref``/``\\autoref`` would have printed, from the label's own prefix."""
+    low = (label or "").split(":")[0].strip().lower()
+    for prefix, word in _LABEL_PREFIX_WORD:
+        if low == prefix:
+            return word
+    return ""
+
+
+def extract_xref_spans(text: str, spans: list, warnings: list = None) -> str:
+    """Lift ``\\cite``/``\\ref``-family macros out of raw LaTeX as ``«XREF_i»``.
+
+    Each recorded span carries ``xref`` (canonical LaTeX to emit verbatim) instead of
+    ``raw``/``delims``, which is what tells ``renderer.math_delimited`` not to wrap it in ``$``.
+    ``\\cite`` keeps its optional notes; the style variants (``\\citep``/``\\citet``/``\\citealp``
+    ...) all become ``\\cite``, because none of the three target classes loads natbib, so the
+    numbered style is the only one that compiles. An empty argument is reported and dropped
+    rather than printed as a placeholder.
+    """
+    if not text or not _XREF_MACRO_RE.search(text):
+        return text
+    warn = warnings if warnings is not None else []
+    out, i = [], 0
+    while True:
+        m = _XREF_MACRO_RE.search(text, i)
+        if not m:
+            out.append(text[i:])
+            break
+        name = m.group(0).lstrip("\\")
+        opts, braces, after = _read_xref_args(text, m.end())
+        is_cite = "cite" in name.lower() or name.lower() in ("apud", "apudcn", "apudnn")
+        latex = None
+        if is_cite:
+            keys = [k.strip() for k in re.split(r"[,;]", braces[-1] if braces else "") if k.strip()]
+            if keys:
+                arg = "".join(f"[{o}]" for o in opts if o)
+                latex = "\\cite%s{%s}" % (arg, ",".join(keys))
+            else:
+                warn.append("empty_citation_argument")
+        else:
+            labs = [k.strip() for k in re.split(r"[,;]", braces[-1] if braces else "") if k.strip()]
+            if labs:
+                wants_word = name.lower() in ("cref", "autoref", "vref", "nameref")
+                said = bool(_TYPE_WORD_BEFORE_RE.search(text[:m.start()]))
+                parts = []
+                for lab in labs:
+                    word = _label_type_word(lab) if (wants_word and not said) else ""
+                    parts.append(("%s~\\ref{%s}" % (word, lab)) if word else ("\\ref{%s}" % lab))
+                latex = ", ".join(parts)
+            else:
+                warn.append("empty_ref_argument")
+        out.append(text[i:m.start()])
+        if latex is not None:
+            idx = len(spans)
+            spans.append({"index": idx, "xref": latex, "kind": "cite" if is_cite else "ref"})
+            out.append(XREF_PLACEHOLDER.format(i=idx))
+        i = max(after, m.end())
+    return "".join(out)
+
+
+# ---- directive / bookkeeping macro leaks (Session 14A-1, Step C) --------------------------------
+# ``latex_to_text`` has no rule for these macros, so pylatexenc printed their *bookkeeping*
+# instead of their content and the result reached the reader's PDF. Measured on the audited
+# papers: ``\hyperref[systemcard]{system card}`` -> ``[systemcard]system card``,
+# ``\footnotetext[\thefootnote]{For AMC 10...}`` -> ``[]For AMC 10...``,
+# ``\includepdf[pages=-]{assets/Card.pdf}`` -> ``[pages=-]assets/Card.pdf``,
+# ``\lstinputlisting[style=data,...]{data/p.md}`` -> ``[style=data,...]data/p.md``,
+# ``\let\@fnsymbol\@arabic`` -> ``fnsymbolarabic``.
+# ``\href{newser.com}{newser.com}`` -> ``newser.comnewser.com``: the converter prints the link
+# *target* and the link *text* back to back with no separator, which is the duplicate-URL class.
+_LEAKY_MACRO_RE = re.compile(
+    r"\\(?:hyperref|href|url|footnote|footnotetext|footnotemark|footref|footmarking|includepdf"
+    r"|lstinputlisting|let|global|UTF8gbsn|CJKfamily|CJKdate|CJKdigits|fnsymbol|label"
+    r"|stepcounter|setcounter|addtocounter|addtocounters|newcounter|counterwithin"
+    r"|setcounterwithin|value)\*?(?![A-Za-z])")
+_CJK_ENV_RE = re.compile(
+    r"\\(?:begin|end)\s*\{CJK\*?\}\s*(?:\{[^{}]*\}\s*\{[^{}]*\})?")
+_CONTROL_WORD_RE = re.compile(r"\\[@A-Za-z]+\*?")
+
+# Emit-time backstop, kept as a copy of ``renderer.DIRECTIVE_LEAK_PATTERNS`` for the same reason
+# the bbox scrub is: the test suite loads this file by path while ``renderer`` may already be bound
+# to the app's vendored copy, and importing across the two broke collection.
+# ``test_scrubbers_agree_at_both_ends`` asserts the two lists stay identical.
+DIRECTIVE_LEAK_PATTERNS = (
+    r"\[pages?=[^\]]*\]\s*[^\s{,}]*\.pdf",   # \includepdf[pages=-]{file.pdf}
+    r"\[pages?=[^\]]*\]",
+    r"\[systemcard\]",
+    r"\[style=[^\]]*\]",
+    r"\[language=[^\]]*\]",
+    r"\blst:[A-Za-z0-9_:.\-]+",
+    r"\bsec:[A-Za-z0-9_:.\-]+",
+    r"\bUTF8gbsn\b",
+    r"\bfnsymbolarabic\b",
+    r"\b\d+\s+footnote\b",
+    r"\bfootnote\b(?=\s*\[)",
+)
+_DIRECTIVE_LEAK_RES = tuple(re.compile(p) for p in DIRECTIVE_LEAK_PATTERNS)
+
+
+def strip_directive_leaks(s):
+    """Remove leaked directives and macro names before they are stored in the SIR."""
+    if not s:
+        return s
+    s = str(s)
+    if "[" not in s and "sec:" not in s and "lst:" not in s and "footnote" not in s \
+            and "UTF8gbsn" not in s and "fnsymbolarabic" not in s:
+        return s
+    for rx in _DIRECTIVE_LEAK_RES:
+        s = rx.sub(" ", s)
+    return re.sub(r"[ \t]{2,}", " ", s).strip() if "\n" not in s else re.sub(r"[ \t]{2,}", " ", s)
+
+
+def normalise_leaky_macros(text: str, warnings: list = None) -> str:
+    """Unwrap the macros whose name (not content) would otherwise be printed.
+
+    A footnote keeps its text inline rather than as a real \\footnote: the target classes put
+    these notes inside tabular bodies (2303.08774's ``AMC 10\\footnotemark``), and LaTeX forbids
+    \\footnote there, so inlining is the only form that both compiles and preserves the sentence.
+    ``\\href`` and ``\\hyperref`` keep the *visible* argument, which is what LaTeX prints, so the
+    link target stops being printed next to the link text (``newser.comnewser.com``).
+    \\includepdf and \\lstinputlisting are dropped with a warning naming the file — merging them
+    is Session 14A-2's scope; the leak is not.
+    """
+    if not text:
+        return text
+    text = _CJK_ENV_RE.sub(" ", text)
+    if not _LEAKY_MACRO_RE.search(text):
+        return text
+    warn = warnings if warnings is not None else []
+    out, i = [], 0
+    while True:
+        m = _LEAKY_MACRO_RE.search(text, i)
+        if not m:
+            out.append(text[i:])
+            break
+        name = m.group(0).lstrip("\\").rstrip("*")
+        _opts, braces, after = _read_xref_args(text, m.end())
+        arg = braces[-1] if braces else None
+        out.append(text[i:m.start()])
+        if name in ("footnote", "footnotetext", "hyperref", "href", "url"):
+            # The kept argument is re-scanned: 2303.08774 hides
+            # \footnote{\href{u}{u}} inside a footnote, and without the recursion the inner
+            # macro is skipped over and still prints its target twice.
+            out.append(normalise_leaky_macros(arg or "", warn))
+        elif name in ("footnotemark", "footref", "footmarking"):
+            pass
+        elif name in ("includepdf", "lstinputlisting"):
+            warn.append("%s: %s (the file's contents are not in the converted document)"
+                        % ("external PDF page range not merged" if name == "includepdf"
+                           else "listing file not inlined", (arg or "").strip()))
+        else:                                   # \let, \global, font switches
+            j = after
+            for _ in range(2 if name in ("let", "global") else 0):
+                k = _skip_ws(text, j)
+                cw = _CONTROL_WORD_RE.match(text, k)
+                if not cw:
+                    break
+                j = cw.end()
+            out.append(" ")
+            i = max(j, m.end())
+            continue
+        i = max(after, m.end())
+    return "".join(out)
+
+
 def text_with_math(raw: str, warnings: list = None):
     """Raw LaTeX -> (plain text with placeholders, math spans). The one entry point every
     text-bearing SIR field goes through since v2."""
     clean, spans = extract_math_spans(raw or "", warnings)
-    return scrub_layout_artifacts(norm_ws(latex_to_text(clean))), spans
+    clean = extract_xref_spans(clean, spans, warnings)
+    clean = normalise_leaky_macros(clean, warnings)
+    return scrub_layout_artifacts(
+        norm_ws(strip_directive_leaks(latex_to_text(clean)))), spans
 
 
 # ---- paper-local macro definitions (schema v2) -----------------------------------------------
@@ -1536,10 +1760,19 @@ def scan_blocks(text: str, ctx: dict, depth: int = 0):
             ctx["n_cites"] += 1
         elif kind == "ref":
             lab, rkind = payload
-            if rkind == "figure":
+            lab = (lab or "").strip()
+            if not lab:
+                ctx["warnings"].append("empty_ref_argument")
+            elif rkind == "figure":
                 blocks.append({"type": "figure_ref", "label": lab})
             elif rkind == "table":
                 blocks.append({"type": "table_ref", "label": lab})
+            else:
+                # A \ref whose target is a section, equation or any other label used to be
+                # discarded here, because only floats are anchored. That is what turned the
+                # source's "described in Section \ref{sec:sft_data}." into "described in
+                # Section ." in the reader's PDF. The reference itself has to survive.
+                blocks.append({"type": "ref", "label": lab})
         elif kind == "noop":
             ctx["warnings"].append(f"unclosed environment: {payload}")
         elif kind == "section":
@@ -1555,6 +1788,12 @@ def _next_construct(text: str, pos: int, kinds=None):
     m = _ENV_BEGIN_RE.search(text, pos)
     if m:
         env, istart = m.group(1), m.end()
+        if env.lower() in _ARGFUL_ENVS:
+            # ``\begin{CJK*}{UTF8}{gbsn}`` carries mandatory arguments in the tag. They are not
+            # content, and leaving them in the body turned "{UTF8}{gbsn}" into a stray paragraph
+            # that printed ``UTF8gbsn`` above 2501.12948's first section. Only these environments
+            # are skipped: for a general environment a leading ``{...}`` really can be its body.
+            _o, _b, istart = _read_xref_args(text, istart)
         iend, after = find_env_end(text, istart, env)
         if iend < 0:
             # An unclosed \begin{...}: skip the tag and keep scanning, so the text that follows is
@@ -1674,6 +1913,16 @@ def build_sections(body: str, ctx: dict):
     sections = []
     cur = {"level": 0, "heading": None, "blocks": []}
     pos = 0
+    in_appendix = False
+
+    def region(text):
+        """Blocks of one run between headings, honouring any ``\\appendix`` marker inside it."""
+        nonlocal in_appendix
+        if _APPENDIX_RE.search(text):
+            in_appendix = True
+            text = _APPENDIX_RE.sub(" ", text)
+        return scan_blocks(text, ctx)
+
     while True:
         m = _SECTION_RE.search(body, pos)
         if not m:
@@ -1683,17 +1932,29 @@ def build_sections(body: str, ctx: dict):
         # Which section a float was declared in is the anchor renderer.anchor_floats() falls back to
         # when the body never cites it, so the ordinal has to be in ctx before the region is scanned.
         ctx["section_index"] = len(sections)
-        cur["blocks"].extend(scan_blocks(body[pos:m.start()], ctx))
+        cur["blocks"].extend(region(body[pos:m.start()]))
         if cur["blocks"] or cur["heading"] is not None:
             sections.append(cur)
         heading_src, heading_spans = extract_math_spans(inner, ctx["warnings"])
         cur = {"level": _SECTION_LEVEL.get(name, 1), "heading": clean_heading(heading_src),
                "blocks": []}
+        # A section's own ``\label`` is how ``\ref{sec:approach}`` resolves. The rebuilt document
+        # re-numbers headings, so without carrying the label the reference is defined nowhere and
+        # LaTeX prints ?? -- which is why this is part of the same fix as the blank cross-refs.
+        lab = _LABEL_RE.search(inner)
+        if not lab:
+            lab = re.match(r"\s*(?:\\label\s*\{([^{}]*)\})", body[after:after + 160])
+            if lab:
+                cur["label"] = lab.group(1).strip()
+        else:
+            cur["label"] = lab.group(1).strip()
+        if in_appendix:
+            cur["appendix"] = True
         if heading_spans:
             cur["math_spans"] = heading_spans
         pos = after
     ctx["section_index"] = len(sections)
-    cur["blocks"].extend(scan_blocks(body[pos:], ctx))
+    cur["blocks"].extend(region(body[pos:]))
     if cur["blocks"] or cur["heading"] is not None or not sections:
         sections.append(cur)
     return sections

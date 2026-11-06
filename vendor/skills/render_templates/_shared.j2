@@ -211,6 +211,8 @@
 \ref{ {{- block.get("label") | citekey -}} }
 {%- elif t == "table_ref" -%}
 \ref{ {{- block.get("label") | citekey -}} }
+{%- elif t == "ref" -%}
+\ref{ {{- block.get("label") | citekey -}} }
 {%- elif t == "float" -%}
 {%- if block.get("kind") == "table" -%}{{ render_table(block["float"]) }}
 {%- else -%}{{ render_figure(block["float"]) }}
@@ -228,6 +230,20 @@
 {% macro render_section(section, depth=0) -%}
 {%- set level = section.get("level", 1) -%}
 {%- set heading = section.get("heading") -%}
+{%- if section.get("_appendix_break") %}
+{#- Class-specific, measured rather than assumed. IEEEtran conference mode's \appendix prints a
+    bare "APPENDIX" line and then the section BODY -- the section TITLE is never typeset, which
+    would have deleted all eight of GPT-3's appendix headings from the reader's document. Resetting
+    the counter letters the sections A, B, C, keeps the heading, and makes \ref{appendix:...}
+    resolve to "Appendix A". acmart and llncs typeset \appendix correctly (8/8 and 7/8 titles
+    present in the real build), so they keep the command the source itself used. -#}
+{% if format == "ieee" %}
+\setcounter{section}{0}
+\renewcommand{\thesection}{\Alph{section}}
+{% else %}
+\appendix
+{% endif %}
+{% endif -%}
 {%- set heading_tex = render_with_math(heading, section.get("math_spans") or []) if heading is not none else "" -%}
 {%- if heading is not none and heading | trim -%}
 {%- if level == 1 %}\section{ {{- heading_tex -}} }
@@ -235,6 +251,8 @@
 {%- elif level == 3 %}\subsubsection{ {{- heading_tex -}} }
 {%- else %}\paragraph{ {{- heading_tex -}} }
 {%- endif %}
+{#- The source's own section label, so \ref{sec:...} resolves in the rebuilt document. -#}
+{%- if section.get("label") %} \label{ {{- section["label"] | citekey -}} }{% endif %}
 
 {%- elif level >= 1 %}\section{}
 

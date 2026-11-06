@@ -52,6 +52,7 @@ BS = chr(92)
 _PROTECT_CHARS = "&#_%$"
 _PROTECT_RE = re.compile("(?<![" + re.escape(BS) + "])([" + re.escape(_PROTECT_CHARS) + "])")
 _KEY_BAD = re.compile(r"[^A-Za-z0-9_:.\-\/]")
+_LABEL_IN_TEX_RE = re.compile(r"\\label\s*\{([^{}]*)\}")
 
 
 def protect_tex(s):
@@ -92,6 +93,70 @@ def strip_bbox(s, marked_only=False):
     if not s or "[[" not in s:
         return s
     return (BBOX_MARKED_RE if marked_only else BBOX_ARTIFACT_RE).sub(" ", str(s))
+
+
+# ------------------------------------------------- directive / macro-name leaks (Session 14A-1)
+# The pre-storage pass in ``sir_extractor`` handles these at the source; this set is the emit-time
+# backstop for text that reached the SIR by another route (v1 SIRs, verbatim table bodies,
+# preserved paper-local macros, author blocks). The two lists are deliberately copies of the same
+# tuples and ``test_scrubbers_agree_at_both_ends`` pins that, exactly as the bbox scrub does.
+# Each pattern is a *bookkeeping* string: a directive with its own key=value shape, or a macro name
+# that only makes sense as TeX. Ordinary prose matches none of them, which is why "footnote" is
+# stripped only in its artifact forms ("2 footnote", "footnote []") and never as a plain word.
+DIRECTIVE_LEAK_PATTERNS = (
+    r"\[pages?=[^\]]*\]\s*[^\s{,}]*\.pdf",   # \includepdf[pages=-]{file.pdf}
+    r"\[pages?=[^\]]*\]",
+    r"\[systemcard\]",
+    r"\[style=[^\]]*\]",
+    r"\[language=[^\]]*\]",
+    r"\blst:[A-Za-z0-9_:.\-]+",
+    r"\bsec:[A-Za-z0-9_:.\-]+",
+    r"\bUTF8gbsn\b",
+    r"\bfnsymbolarabic\b",
+    r"\b\d+\s+footnote\b",
+    r"\bfootnote\b(?=\s*\[)",
+)
+DIRECTIVE_LEAK_RES = tuple(re.compile(p) for p in DIRECTIVE_LEAK_PATTERNS)
+
+
+def strip_directive_leaks(s):
+    """Remove leaked directives and macro names from text about to be emitted."""
+    if not s:
+        return s
+    s = str(s)
+    if "[" not in s and "sec:" not in s and "lst:" not in s and "footnote" not in s \
+            and "UTF8gbsn" not in s and "fnsymbolarabic" not in s:
+        return s
+    for rx in DIRECTIVE_LEAK_RES:
+        s = rx.sub(" ", s)
+    return re.sub(r"[ \t]{2,}", " ", s).strip() if "\n" not in s else re.sub(r"[ \t]{2,}", " ", s)
+
+
+# ------------------------------------------------------- duplicate / glued URLs (Session 14A-1)
+# pylatexenc prints ``\href{u}{t}`` as ``ut``, so a link whose target is also its visible text is
+# emitted twice with no separator (2005.14165's ``newser.comnewser.com``, 2303.08774's
+# ``.../evals.../evals``, 2501.12948's model cards). The extractor now keeps only the visible
+# argument; these two rules are the emit-time backstop for text that reached the SIR another way.
+_GLUED_SCHEME_RE = re.compile(r"(?<=[A-Za-z0-9)!.\-])(https?://|mailto:)")
+_DUP_URL_RE = re.compile(
+    r"([A-Za-z0-9:/.\-?%=&+~#]{2,}?(?:\.(?:com|org|net|io|ai|dev|gov|edu)(?::\d+)?"
+    r"(?:/[A-Za-z0-9:/.\-?%=&+~#]*)?))\1")
+
+
+def separate_urls(s):
+    """Collapse an immediately repeated URL, and un-glue a word from a scheme that follows it."""
+    if not s or ("http://" not in s and "https://" not in s and "mailto:" not in s):
+        return s
+    s = str(s)
+    for _ in range(3):                       # a^3 collapses to a, but two passes is the common case
+        out = _DUP_URL_RE.sub(r"\1", s)
+        out = _GLUED_SCHEME_RE.sub(r" \1", out)
+        if out == s:
+            break
+        s = out
+    return s
+
+
 
 
 # ----------------------------------------------------------------- CJK / combining marks (Session 13)
@@ -213,19 +278,21 @@ def escape_unicode(text):
 
 
 def protect_tex_unicode(s):
-    """The one text-mode choke point: scrub, fold, escape, then map Unicode.
+    """The one text-mode choke point: scrub, strip directive leaks, fold, escape, then map Unicode.
 
     Every prose field in every template reaches the PDF through here (directly, or as the
     placeholder-free part of ``render_with_math``), which is what makes the Session 13 scrub a
     class fix rather than a per-field patch: author names, keywords, headings, captions, list items,
     reference strings and abstracts are all covered by one call site.
     """
-    return escape_unicode(protect_tex(fold_cjk(strip_bbox(s))))
+    return escape_unicode(protect_tex(
+        fold_cjk(strip_directive_leaks(separate_urls(strip_bbox(s))))))
 
 
-# protect_tex() escapes the "_" inside «MATH_<i>» as "\_", so the pattern must accept both forms.
-_PLACEHOLDER_RE = re.compile(r"«MATH\\?_(\d+)»")
-_PLACEHOLDER_SPLIT_RE = re.compile(r"(«MATH\\?_\d+»)")
+# protect_tex() escapes the "_" inside «MATH_<i>» and «XREF_<i>» as "\_", so the pattern must
+# accept both forms.
+_PLACEHOLDER_RE = re.compile(r"«(?:MATH|XREF)\\?_(\d+)»")
+_PLACEHOLDER_SPLIT_RE = re.compile(r"(«(?:MATH|XREF)\\?_\d+»)")
 
 
 def _live_dollar_positions(s):
@@ -281,6 +348,10 @@ def _recover_dollar_span(raw):
 def math_delimited(span):
     """A span dict -> raw LaTeX wrapped in its original delimiters. Unknown delimiters fall back
     to ``$...$``, which is valid for any math-mode content."""
+    if span.get("xref") is not None:
+        # A citation or reference lifted out by ``extract_xref_spans``: already canonical LaTeX,
+        # and wrapping it in ``$`` would be a math-mode error.
+        return str(span["xref"])
     raw = span.get("raw")
     raw = "" if raw is None else str(raw)
     delims = span.get("delims") or "$"
@@ -350,7 +421,137 @@ def citekey(s):
 # a sentence at every \cite/\ref, so "improvements through tricks \cite{a} and \cite{b}, while ..."
 # arrives as paragraph/citation/paragraph/citation/paragraph. LaTeX joins the pieces with a space
 # only if there is no blank line between them, so the template must not put one there.
-_INLINE_BLOCK_TYPES = {"citation", "figure_ref", "table_ref"}
+_INLINE_BLOCK_TYPES = {"citation", "figure_ref", "table_ref", "ref"}
+
+
+def defined_labels(sections, figures, tables, equations, label_map=None):
+    """Every ``\\label`` the rebuilt document will actually define.
+
+    Deliberately generous: a target wrongly judged missing deletes a working reference, which is
+    worse than the ``??`` it was meant to prevent. So float labels, section labels, equation labels,
+    any ``\\label`` inside verbatim table or equation LaTeX, and the SIR's label map all count.
+    """
+    labs = set()
+
+    def add(value):
+        if value:
+            key = citekey(value)
+            if key and key != "ref":
+                labs.add(key)
+
+    for s in sections or []:
+        if isinstance(s, dict) and (s.get("heading") or "").strip():
+            add(s.get("label"))
+    for coll in (figures or [], tables or []):
+        for f in coll:
+            if isinstance(f, dict):
+                add(f.get("label"))
+                add(_LABEL_IN_TEX_RE.search(f.get("latex") or ""))
+    for e in equations or []:
+        if isinstance(e, dict):
+            add(e.get("label"))
+            add(_LABEL_IN_TEX_RE.search(e.get("latex") or ""))
+            for m in _LABEL_IN_TEX_RE.finditer(e.get("latex") or ""):
+                add(m.group(1))
+    for key in (label_map or {}):
+        add(key)
+    return labs
+
+
+def drop_unresolved_refs(sections, figures, tables, equations, defined, warnings):
+    """Remove a reference whose target the rebuilt document does not define.
+
+    Emitting ``\\ref{sec:approach}`` for a section that has no such label prints ``??`` — the audit
+    lists ``??`` as its own Priority-0 class, and 444 of them appeared the moment blank
+    cross-references were turned into real ``\\ref`` calls. The sentence keeps its wording; the
+    number that cannot exist is dropped, and the count is reported rather than hidden.
+    """
+    dropped = []
+
+    def resolvable(label):
+        return not label or citekey(label) in defined
+
+    for s in sections or []:
+        if not isinstance(s, dict):
+            continue
+        keep, removed = [], 0
+        for b in s.get("blocks") or []:
+            if isinstance(b, dict) and b.get("type") in ("ref", "figure_ref", "table_ref") \
+                    and not resolvable(b.get("label")):
+                removed += 1
+                continue
+            keep.append(b)
+        if removed:
+            s["blocks"] = keep
+            dropped.append(removed)
+        _clean_span_refs(s.get("math_spans"), defined, dropped)
+        for b in s.get("blocks") or []:
+            if isinstance(b, dict):
+                _clean_span_refs(b.get("math_spans"), defined, dropped, items=True)
+    for coll in (figures or [], tables or []):
+        for f in coll:
+            if isinstance(f, dict):
+                _clean_span_refs(f.get("math_spans"), defined, dropped)
+    if dropped:
+        warnings.append("%d cross-reference(s) point at a label this document does not define "
+                        "(a section, listing or exhibit the source kept but the class does not "
+                        "reproduce): dropped rather than printed as ??" % sum(dropped))
+    return sections
+
+
+def _clean_span_refs(spans, defined, dropped, items=False):
+    """Normalise and, where needed, blank the ``xref`` spans in *spans*.
+
+    The label inside ``\\ref{...}`` is put through ``citekey`` for the same reason the templates do
+    it: 2005.14165's own label is ``figure:eval strategies`` with a space, and the float's
+    ``\\label`` is emitted sanitised. Two spellings of the same target is exactly how LaTeX prints
+    ``??``.
+    """
+    if not spans:
+        return
+    groups = spans if items and isinstance(spans, list) and spans and isinstance(spans[0], list) \
+        else [spans]
+    for group in groups:
+        if not isinstance(group, list):
+            continue
+        for span in group:
+            if not isinstance(span, dict) or "xref" not in span:
+                continue
+            xref = span["xref"]
+            if not xref:
+                continue
+            xref = re.sub(r"\\ref\{([^{}]*)\}",
+                          lambda m: "\\ref{%s}" % ",".join(
+                              citekey(x) for x in m.group(1).split(",") if x.strip()), xref)
+            xref = re.sub(r"\\cite(\[[^\]]*\])?\{([^{}]*)\}",
+                          lambda m: "\\cite%s{%s}" % (m.group(1) or "", ",".join(
+                              citekey(x) for x in m.group(2).split(",") if x.strip())), xref)
+            span["xref"] = xref
+            targets = re.findall(r"\\ref\{([^{}]*)\}", xref)
+            if not targets:
+                continue
+            keys = [k.strip() for t in targets for k in t.split(",")]
+            if all(citekey(k) in defined for k in keys):
+                continue
+            span["xref"] = ""
+            dropped.append(1)
+
+
+def mark_appendix_break(sections):
+    """Flag the first appendix section so a template emits ``\\appendix`` exactly once.
+
+    The class then letters the sections that follow (A, B, C) and restarts float numbering, which
+    is what the source's own ``\\appendix`` asked for. The flag itself comes from
+    ``sir_extractor.build_sections``; a SIR without it (schema v1, or a paper with no appendix)
+    renders exactly as before.
+    """
+    done = False
+    for s in sections or []:
+        if not isinstance(s, dict) or not s.get("appendix") or done or s.get("level", 1) != 1:
+            continue
+        s["_appendix_break"] = True
+        done = True
+    return sections
 
 
 def annotate_block_separators(sections):
@@ -768,8 +969,13 @@ def build_context(sir, fmt, warnings):
     tables, tikz_tables = sanitize_tables(sir.get("tables") or [])
     if tikz_tables:
         warnings.append(f"{tikz_tables} table(s) were TikZ/PGF diagrams -> placeholder body")
+    figures = sir.get("figures") or []
+    equations = sir.get("equations") or []
+    defined = defined_labels(sections, figures, tables, equations, sir.get("labels") or {})
+    drop_unresolved_refs(sections, figures, tables, equations, defined, warnings)
     sections, pending_figures, pending_tables = anchor_floats(
-        annotate_block_separators(sections), sir.get("figures") or [], tables)
+        annotate_block_separators(mark_appendix_break(sections)),
+        figures, tables)
     broken = unbalanced_spans(sir)
     if broken:
         warnings.append(f"{broken} math span(s) with unbalanced $ re-split into text + math")
