@@ -38,7 +38,10 @@ import re
 import sys
 from datetime import datetime, timezone
 
-SCHEMA_VERSION = "2.0"
+# 2.1: SIR gained "external_files" and the "listing" / "includepdf" block types (Session 14B).
+# Old 2.0 SIRs still render -- the renderer reads the key with .get() and defaults to empty -- but
+# they carry no listings, so a corpus re-extraction is what would make them show any.
+SCHEMA_VERSION = "2.1"
 FORMATS = ("original", "ieee", "acm", "lncs")
 
 # recompile.py writes "\documentclass{llncs}" for the "lncs" key; the identifier on disk is lncs.
