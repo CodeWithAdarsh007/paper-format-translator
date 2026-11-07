@@ -737,6 +737,18 @@ def float_width(fmt, span=False):
     return BS + "linewidth"
 
 
+def float_placement(span=False):
+    r"""The placement specifier a float may legally carry.
+
+    ``H`` (float.sty, loaded by all three templates) is what keeps an ordinary float in the
+    sequence of the paper, which is the Session 13 guarantee. A spanning float cannot have it:
+    IEEEtran's ``figure*``/``table*`` accept only ``t``/``b``/``p``, and an unknown option is both a
+    warning and a float that never appears. ``!t`` is the closest legal equivalent — top of the
+    page, with the page-float restrictions overridden.
+    """
+    return "!t" if span else FLOAT_PLACEMENT
+
+
 def anchor_floats(sections, figures, tables):
     """Emit every float at the place in the body where the paper put it.
 
@@ -1058,6 +1070,7 @@ def _env(templates_dir=None):
     ed.globals["insert_label"] = insert_label
     ed.globals["render_with_math"] = render_with_math
     ed.globals["float_width"] = float_width
+    ed.globals["float_placement"] = float_placement
     ed.globals["FLOAT_PLACEMENT"] = FLOAT_PLACEMENT
     return ed
 

@@ -619,6 +619,57 @@ DIRECTIVE_LEAK_PATTERNS = (
 _DIRECTIVE_LEAK_RES = tuple(re.compile(p) for p in DIRECTIVE_LEAK_PATTERNS)
 
 
+# ---- external file macros: \lstinputlisting and \includepdf (Session 14B, Steps B and C) -------
+# Both name a file in the source tree that has to travel with the rebuilt document. 2501.12948
+# writes eight of them, each alone on its own line of appendix.tex; 2303.08774 appends the 60-page
+# GPT-4 System Card the same way. normalise_leaky_macros() below still handles a *mention* inside
+# a sentence, but a call that occupies a block of its own is lifted here into a block, which is the
+# only level that can create one: by the time a string reaches the flattener the code no longer
+# knows whether it was a whole paragraph or a clause.
+_FILE_MACRO_RE = re.compile(r"\\(lstinputlisting|includepdf)\*?(?![A-Za-z])")
+# Option keys worth keeping as structured fields. Everything else in the [..] group is replayed
+# verbatim, so an unusual key is dropped to the renderer rather than silently lost.
+_LISTING_OPT_KEYS = ("caption", "label", "style", "language", "name")
+
+
+def _opt_value(opts, key):
+    """The value of ``key=value`` inside a listings/pdfpages option list, brace-aware."""
+    for o in opts or []:
+        m = re.search(r"(?:^|[,{])\s*" + re.escape(key) + r"\s*=\s*", o)
+        if not m:
+            continue
+        rest = o[m.end():]
+        if rest.startswith("{"):
+            val, _end = match_braces(rest, 0)
+            return val.strip()
+        return rest.split(",", 1)[0].strip()
+    return None
+
+
+def parse_file_macro(text: str, m):
+    """``(block, index_past_call)`` for the ``\\lstinputlisting`` / ``\\includepdf`` at *m*."""
+    name = m.group(1)
+    opts, braces, after = _read_xref_args(text, m.end())
+    path = (braces[-1] if braces else "").strip()
+    if not path:
+        return None, after
+    if name == "includepdf":
+        block = {"type": "includepdf", "path": path,
+                 "options": (opts[0].strip() if opts else "pages=-") or "pages=-"}
+    else:
+        block = {"type": "listing", "path": path}
+        for key in _LISTING_OPT_KEYS:
+            val = _opt_value(opts, key)
+            if val:
+                block[key] = val
+        rest = [kv.strip() for kv in re.split(r",", (opts[0] if opts else ""))
+                if kv.strip() and not any(
+                    re.match(r"^\s*" + k + r"\s*=", kv) for k in _LISTING_OPT_KEYS)]
+        if rest:
+            block["extra_options"] = ",".join(rest)
+    return block, after
+
+
 def strip_directive_leaks(s):
     """Remove leaked directives and macro names before they are stored in the SIR."""
     if not s:
@@ -715,7 +766,7 @@ def extract_footnote_markers(text: str, warnings: list = None):
     return "".join(out), n
 
 
-def text_with_math(raw: str, warnings: list = None, footnotes: bool = False):
+def text_with_math(raw: str, warnings: list = None, footnotes: bool = False, macros=None):
     """Raw LaTeX -> (plain text with placeholders, math spans). The one entry point every
     text-bearing SIR field goes through since v2.
 
@@ -723,11 +774,16 @@ def text_with_math(raw: str, warnings: list = None, footnotes: bool = False):
     it marks real footnotes so the renderer can emit them as ``\\footnote{}``. Captions, the
     abstract and headings leave it off and keep the Session 14A-1 inlined form, which is what made
     2303.08774 compile.
+
+    ``macros`` is the paper-local text-expansion table. It is applied after the math and reference
+    spans have been lifted out, which is what keeps ``$M_n(\\R)$`` intact while still turning
+    ``\\dsri{}`` into "DeepSeek-R1".
     """
     if footnotes and raw:
         raw, _n = extract_footnote_markers(raw, warnings)
     clean, spans = extract_math_spans(raw or "", warnings)
     clean = extract_xref_spans(clean, spans, warnings)
+    clean = expand_text_macros(clean, macros)
     clean = normalise_leaky_macros(clean, warnings)
     return scrub_layout_artifacts(
         norm_ws(strip_directive_leaks(latex_to_text(clean)))), spans
@@ -828,10 +884,68 @@ def collect_macro_definitions(preamble: str):
     return out + list(colours.values())
 
 
-def clean_heading(s: str) -> str:
+# ---- applying the macro table to text (Session 14B, Step D) ------------------------------------
+# collect_macro_definitions() already parses the preamble correctly and the definitions are
+# re-emitted into the rebuilt preamble, so any site that survives as *raw* LaTeX renders fine:
+# 2501.12948's "Training Costs & \textbf{\dsro{}}" table header was always right. The loss is
+# confined to fields that go through latex_to_text(), whose final sweep (see line 313) deletes every
+# control word it did not resolve. For a name macro written \dsri{} the argument is empty, so the
+# word disappears and the sentence reads "the effectiveness of is highly contingent".
+#
+# Only zero-argument macros whose body flattens to pure text are expanded here. That restriction is
+# what keeps math safe: \R is defined as \mathbb{R}, which flattens to "R", and substituting it
+# inside $M_n(\R)$ would silently downgrade the notation. Those stay for the emitted preamble.
+_TEXT_EXPANDABLE_RE = re.compile(
+    r"\\providecommand\{\\([A-Za-z]+)\}(?:\[(\d+)\](?:\[[^\]]*\])?)?\{(.+)\}\s*$", re.S)
+# The body must also be *made of* text, judged on the raw definition rather than its flattened
+# form. latex_to_text() deletes every control word it does not resolve, so the body of 2402.12424's
+# \opensource -- a wrapper around \includegraphics of a lock icon -- flattens to the literal string
+# "<graphics>", contains no backslash, and passed a flattened-only filter. Every \opensource in a
+# caption was then replaced by that string. A body that draws, colours or measures is not text.
+_TEXT_SAFE_BODY_RE = re.compile(
+    r"^(?:[^\\]|\\(?:text(?:sc|bf|it|rm|sf|tt|up|md)|emph|xspace|mbox)\b|\\[,;:!`'])*$")
+
+
+def build_text_macro_expansions(macro_defs):
+    """``{name: plain text}`` for the zero-argument macros whose body is printable words."""
+    table = {}
+    for d in macro_defs or []:
+        m = _TEXT_EXPANDABLE_RE.match(d.strip())
+        if not m or m.group(2):
+            continue
+        if not _TEXT_SAFE_BODY_RE.match(m.group(3)):
+            continue
+        flat = norm_ws(latex_to_text(m.group(3)))
+        if not flat or any(c in flat for c in "\\{}#$&%_<>"):
+            continue
+        table.setdefault(m.group(1), flat)
+    return table
+
+
+def expand_text_macros(text: str, table) -> str:
+    """Replace ``\\name`` and ``\\name{}`` with the table's text, keeping the spaces either side.
+
+    Dropping the surrounding space is what glued ".../evals" to "here" in Session 14A-1, so the
+    whitespace a call consumed is put back rather than swallowed: group 2 is the run before an
+    optional ``{}``, group 3 the run after it.
+    """
+    if not text or not table:
+        return text
+
+    def repl(m):
+        val = table.get(m.group(1))
+        if val is None:
+            return m.group(0)
+        return val + (m.group(2) or "") + (m.group(3) or "")
+
+    return re.sub(r"(?<!\\)\\([A-Za-z]+)(?![A-Za-z])(\s*)(?:\{\s*\}(\s*))?", repl, text)
+
+
+def clean_heading(s: str, macros=None) -> str:
     """Heading text: numbers/labels/macros out, plain words in."""
     s = _LABEL_RE.sub(" ", s)
     s = re.sub(r"\\(?:cite|ref)\*?(?:\[[^\]]*\])*\s*\{[^{}]*\}", " ", s)
+    s = expand_text_macros(s, macros)
     return latex_to_text(s) if s.strip() else ""
 
 
@@ -1361,7 +1475,7 @@ def pdfinfo_fields(text: str):
     return out
 
 
-def extract_metadata(preamble: str, body: str, warnings: list):
+def extract_metadata(preamble: str, body: str, warnings: list, macros=None):
     """Title/authors/abstract/keywords, searched in the preamble first then the body.
 
     Single-file papers declare ``\\title`` in the preamble; llncs-style papers put ``\\title``,
@@ -1407,7 +1521,7 @@ def extract_metadata(preamble: str, body: str, warnings: list):
         else:
             warnings.append("no abstract found")
     if raw_ab is not None:
-        md["abstract"], ab_spans = text_with_math(raw_ab, warnings)
+        md["abstract"], ab_spans = text_with_math(raw_ab, warnings, macros=macros)
         if ab_spans:
             md["abstract_math_spans"] = ab_spans
     kw_src = body + "\n" + preamble
@@ -1461,7 +1575,7 @@ def _drop_caption_label(body: str) -> str:
     return "".join(out)
 
 
-def parse_figure(inner: str, warnings: list):
+def parse_figure(inner: str, warnings: list, macros=None):
     fig = {"label": None, "caption": None, "path": None, "placement": None}
     fig["placement"], inner = split_placement(inner)
     cap = re.search(r"\\caption\s*(?:\[[^\]]*\])?\s*\{", inner)
@@ -1471,7 +1585,7 @@ def parse_figure(inner: str, warnings: list):
         if lab:
             fig["label"] = lab.group(1).strip()
             text = _LABEL_RE.sub(" ", text)
-        fig["caption"], spans = text_with_math(text, warnings)
+        fig["caption"], spans = text_with_math(text, warnings, macros=macros)
         if spans:
             fig["math_spans"] = spans
     ig = re.search(r"\\includegraphics\s*(?:\[[^\]]*\])?\s*\{([^{}]*)\}", inner)
@@ -1499,7 +1613,8 @@ def parse_figure(inner: str, warnings: list):
     return fig
 
 
-def parse_table(inner: str, warnings: list, env: str = None, whole: str = None):
+def parse_table(inner: str, warnings: list, env: str = None, whole: str = None,
+                 macros=None):
     tab = {"label": None, "caption": None, "latex": "", "placement": None}
     # Only a float carries a placement: for a bare tabular the leading bracket is its column
     # alignment argument (\begin{longtable}[c]{ll}), which belongs inside the body.
@@ -1512,7 +1627,7 @@ def parse_table(inner: str, warnings: list, env: str = None, whole: str = None):
         if lab:
             tab["label"] = lab.group(1).strip()
             text = _LABEL_RE.sub(" ", text)
-        tab["caption"], spans = text_with_math(text, warnings)
+        tab["caption"], spans = text_with_math(text, warnings, macros=macros)
         if spans:
             tab["math_spans"] = spans
     if env in TABULAR_ENVS:
@@ -1560,7 +1675,7 @@ def parse_math(inner: str, env: str, whole: str):
     return {"label": lab.group(1).strip() if lab else None, "latex": latex, "env": env}
 
 
-def parse_list(inner: str, kind: str, warnings: list = None):
+def parse_list(inner: str, kind: str, warnings: list = None, macros=None):
     """``\\item`` separated entries. Any lead-in text before the first ``\\item`` is dropped, and
     ``description`` entries keep only their term+body after the optional label argument.
 
@@ -1570,7 +1685,7 @@ def parse_list(inner: str, kind: str, warnings: list = None):
     parts = re.split(r"\\item\b(?:\[[^\]]*\])?", inner)
     items, item_spans = [], []
     for chunk in parts[1:]:
-        txt, spans = text_with_math(chunk, warnings, footnotes=True)
+        txt, spans = text_with_math(chunk, warnings, footnotes=True, macros=macros)
         if txt:
             items.append(txt)
             item_spans.append(spans)
@@ -1940,11 +2055,11 @@ def scan_blocks(text: str, ctx: dict, depth: int = 0):
     while pos < n:
         nxt = _next_construct(text, pos, ctx["label_kinds"])
         if nxt is None:
-            blocks.extend(paragraphs(text[pos:], ctx["warnings"]))
+            blocks.extend(paragraphs(text[pos:], ctx["warnings"], ctx.get("macros")))
             break
         kind, start, end, payload = nxt
         if start > pos:
-            blocks.extend(paragraphs(text[pos:start], ctx["warnings"]))
+            blocks.extend(paragraphs(text[pos:start], ctx["warnings"], ctx.get("macros")))
         if kind == "env":
             env, inner_start, inner_end, after = payload
             inner = text[inner_start:inner_end]
@@ -1953,7 +2068,7 @@ def scan_blocks(text: str, ctx: dict, depth: int = 0):
             elif env in DIAGRAM_ENVS:
                 pass
             elif env in FIGURE_ENVS:
-                f = parse_figure(inner, ctx["warnings"])
+                f = parse_figure(inner, ctx["warnings"], ctx.get("macros"))
                 if f["label"] or f["caption"]:
                     f["section"] = ctx.get("section_index")
                     # figure*/sidewaysfigure span the whole page, not one column: the IEEE renderer
@@ -1965,7 +2080,8 @@ def scan_blocks(text: str, ctx: dict, depth: int = 0):
                     for panel in f.get("panel_labels") or []:
                         ctx["labels"].setdefault(panel, f["caption"] or "")
             elif env in TABLE_ENVS:
-                t = parse_table(inner, ctx["warnings"], env=env, whole=text[start:end])
+                t = parse_table(inner, ctx["warnings"], env=env, whole=text[start:end],
+                              macros=ctx.get("macros"))
                 if t["label"] or t["caption"] or t["latex"]:
                     t["section"] = ctx.get("section_index")
                     t["span"] = env in SPANNING_FLOAT_ENVS
@@ -1979,11 +2095,13 @@ def scan_blocks(text: str, ctx: dict, depth: int = 0):
                     ctx["labels"].setdefault(e["label"], e["latex"])
                 blocks.append({"type": "equation", "latex": e["latex"], "label": e["label"]})
             elif env in LIST_ENVS:
-                blocks.append(parse_list(inner, LIST_ENVS[env], ctx["warnings"]))
+                blocks.append(parse_list(inner, LIST_ENVS[env], ctx["warnings"],
+                                          ctx.get("macros")))
             elif depth < 6 and env not in ("verbatim", "lstlisting", "minted"):
                 blocks.extend(scan_blocks(inner, ctx, depth + 1))
             else:
-                txt, spans = text_with_math(inner, ctx["warnings"], footnotes=True)
+                txt, spans = text_with_math(inner, ctx["warnings"], footnotes=True,
+                                            macros=ctx.get("macros"))
                 if txt:
                     block = {"type": "paragraph", "text": txt}
                     if spans:
@@ -2020,6 +2138,16 @@ def scan_blocks(text: str, ctx: dict, depth: int = 0):
                 elif rkind == "table":
                     block["type"] = "table_ref"
                 blocks.append(block)
+        elif kind == "filemacro":
+            block = payload
+            blocks.append(block)
+            # Registering the label is what closes the critical: the prose says
+            # "the summary prompt in Listing \ref{lst:prompt:summary}", and the reference was blank
+            # because nothing in the rebuilt document ever defined that label.
+            lab = (block.get("label") or "").strip()
+            if lab:
+                ctx["labels"].setdefault(lab, block.get("caption") or block.get("path") or "")
+            ctx.setdefault("external_files", []).append(block)
         elif kind == "noop":
             ctx["warnings"].append(f"unclosed environment: {payload}")
         elif kind == "section":
@@ -2103,6 +2231,11 @@ def _next_construct(text: str, pos: int, kinds=None):
     m = _SECTION_RE.search(text, pos)
     if m:
         cands.append(("section", m.start(), m.end(), None))
+    m = _FILE_MACRO_RE.search(text, pos)
+    if m and not _inside_footnote(text, m.start()):
+        block, after_fm = parse_file_macro(text, m)
+        if block is not None:
+            cands.append(("filemacro", m.start(), after_fm, block))
     if not cands:
         return None
     cands.sort(key=lambda c: c[1])
@@ -2167,14 +2300,14 @@ def _read_first_arg(text: str, pos: int):
     return None
 
 
-def paragraphs(chunk: str, warnings: list = None):
+def paragraphs(chunk: str, warnings: list = None, macros=None):
     """Prose between structures, split on blank lines. Comments are already gone.
 
     Math is lifted out before latex_to_text (v2): otherwise ``$x \\in A$`` becomes ``x ∈ A`` and
     the renderer later emits ``∈`` outside math mode, which pdflatex rejects per character."""
     out = []
     for part in re.split(r"\n\s*\n", chunk):
-        txt, spans = text_with_math(part, warnings, footnotes=True)
+        txt, spans = text_with_math(part, warnings, footnotes=True, macros=macros)
         if txt and re.search(r"[A-Za-z0-9]", txt):
             block = {"type": "paragraph", "text": txt}
             if spans:
@@ -2257,7 +2390,8 @@ def build_sections(body: str, ctx: dict):
         if cur["blocks"] or cur["heading"] is not None:
             sections.append(cur)
         heading_src, heading_spans = extract_math_spans(inner, ctx["warnings"])
-        cur = {"level": _SECTION_LEVEL.get(name, 1), "heading": clean_heading(heading_src),
+        cur = {"level": _SECTION_LEVEL.get(name, 1),
+               "heading": clean_heading(heading_src, ctx.get("macros")),
                "blocks": []}
         # ``\section*{Acknowledgements}`` is a heading the author deliberately did not number.
         # _SECTION_RE matches the star and used to discard it, so GPT-3's two unnumbered end-matter
@@ -2417,13 +2551,19 @@ def extract_sir(input_path: str, source_format: str = "original", papers_root: s
         scan_body = re.sub(r"\\begin\s*\{abstract\}.*?\\end\s*\{abstract\}", " ",
                            scan_body, flags=re.S)
 
-        md = extract_metadata(preamble, body, warnings)
+        # Collected before the metadata pass so the abstract gets the same expansion prose does:
+        # 2501.12948 writes \dsri{} in running text, and latex_to_text() deletes an unresolved
+        # control word along with its (empty) argument.
         sir["macros"] = collect_macro_definitions(preamble)
+        text_macros = build_text_macro_expansions(sir["macros"])
+        md = extract_metadata(preamble, body, warnings, text_macros)
         ctx = {"warnings": warnings, "figures": figures, "tables": tables,
                "equations": equations, "labels": {}, "n_cites": 0,
+               "external_files": [], "macros": text_macros,
                "label_kinds": collect_label_kinds(scan_body)}
         sir["sections"] = build_sections(scan_body, ctx)
         sir["labels"] = ctx["labels"]
+        sir["external_files"] = ctx["external_files"]
         sir["references"] = refs
         sir["metadata"] = md
         sir["paper_id"] = pid

@@ -169,6 +169,70 @@ def copy_figures(sir: dict, source_dir: Path, build_dir: Path) -> dict:
             "copied_names": copied, "missing_names": missing, "remapped": remapped}
 
 
+def copy_external_files(sir: dict, source_dir: Path, build_dir: Path) -> dict:
+    """Copy the files that \\lstinputlisting and \\includepdf name into the build tree.
+
+    Session 14B. Unlike figures there is no extension substitution to try: a prompt file and the
+    60-page GPT-4 System Card are not interchangeable with anything else in the tree, so the only
+    fallback is the same case-insensitive basename lookup copy_figures uses when a source moves a
+    file between directories. Anything still missing is reported and its call is removed from the
+    .tex (see drop_missing_external_files) rather than left to abort the compile.
+    """
+    source_dir, build_dir = Path(source_dir), Path(build_dir)
+    wanted, seen = [], set()
+    for blk in sir.get("external_files") or []:
+        rel = ((blk or {}).get("path") or "").strip()
+        if rel and rel.lower() not in seen:
+            seen.add(rel.lower())
+            wanted.append(rel)
+    copied, missing = [], []
+    index = None
+    for rel in wanted:
+        src = source_dir / rel
+        if not src.is_file():
+            if index is None:
+                index = _basename_index(source_dir)
+            src = index.get(os.path.basename(rel).lower())
+        if src is None:
+            missing.append(rel)
+            continue
+        try:
+            (build_dir / rel).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(src, build_dir / rel)
+            copied.append(rel)
+        except OSError:
+            missing.append(rel)
+    return {"requested": len(wanted), "copied": len(copied), "missing": len(missing),
+            "copied_names": copied, "missing_names": missing}
+
+
+def drop_missing_external_files(tex: str, missing_paths) -> tuple[str, int]:
+    """Delete \\lstinputlisting / \\includepdf calls whose file did not reach the build dir.
+
+    A missing file is a fatal TeX error for both macros ("File `x.md' not found", and pdfpages
+    failing outright), which is the outcome the listing merge was added to avoid. Dropping the one
+    call costs one float and is reported; the cross-reference to it is left alone, because the
+    reference is a fact about the source and silently deleting it is the failure mode Session 14A-2
+    was scoped to stop.
+    """
+    wanted = {str(p).strip().lower() for p in (missing_paths or []) if p}
+    if not wanted:
+        return tex, 0
+    count = 0
+
+    def repl(m):
+        nonlocal count
+        path = m.group(3).strip().lower()
+        if path not in wanted:
+            return m.group(0)
+        count += 1
+        return ""
+
+    out = re.sub(r"(\\(?:lstinputlisting|includepdf))((?:\[[^\]]*\])?)\s*\{([^{}]*)\}",
+                 lambda mm: repl(mm) or "", tex)
+    return out, count
+
+
 def apply_figure_fallbacks(tex: str, missing_paths, remapped=None) -> tuple[str, int]:
     """Point \\includegraphics at a substituted file, or at a visible placeholder when none exists.
 
@@ -304,6 +368,15 @@ def _render_and_compile(sir_path: Path, work_dir: Path, source_dir: Path,
                     f"{figs['missing']} figure file(s) missing from the source "
                     f"-> placeholder ({', '.join(figs['missing_names'][:3])})")
             entry["figures"] = figs
+            ext = copy_external_files(sir, source_dir, build_dir)
+            if ext["missing"]:
+                tex, dropped = drop_missing_external_files(tex, ext["missing_names"])
+                ext["dropped"] = dropped
+                entry["warnings"].append(
+                    f"{ext['missing']} external file(s) named by \\lstinputlisting/\\includepdf "
+                    f"missing from the source -> call dropped "
+                    f"({', '.join(ext['missing_names'][:3])})")
+            entry["external_files"] = ext
         entry["tex"] = tex
         comp, pdf = _compile(tex, build_dir, source_dir)
         entry.update(comp)

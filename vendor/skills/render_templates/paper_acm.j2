@@ -6,6 +6,7 @@
     is acmart's hard ordering rule; all three are already invisible to the paragraph scan.
 -#}
 {% from "_shared.j2" import render_title, render_macros, render_compat, render_float_support,
+        render_content_support,
         authors_acm, render_section, render_floats, render_references with context %}
 \documentclass[sigconf]{acmart}
 {#- acmart already loads graphicx, amsmath, amssymb and xcolor, so only the table packages it does
@@ -28,6 +29,7 @@
 \IfFileExists{libertine.sty}{}{\AtBeginDocument{\ifcsname microtypesetup\endcsname
   \microtypesetup{expansion=false}\fi}}
 {{ render_compat() }}
+{{ render_content_support() }}
 {{ render_macros(macros) }}
 {{ authors_acm(metadata.authors) }}
 \begin{document}

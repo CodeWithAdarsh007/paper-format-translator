@@ -10,7 +10,7 @@
     inside \author: legal IEEEtran, typeset on the first page, and invisible to the paragraph scan.
 -#}
 {% from "_shared.j2" import render_title, render_macros, render_compat, render_float_support,
-        authors_ieee, render_section, render_floats, render_references with context %}
+        render_content_support, authors_ieee, render_section, render_floats, render_references with context %}
 \documentclass[conference]{IEEEtran}
 \usepackage{amsmath}
 \usepackage{amssymb}
@@ -27,6 +27,7 @@
 \usepackage{makecell}
 {{ render_float_support() }}
 {{ render_compat() }}
+{{ render_content_support() }}
 {{ render_macros(macros) }}
 {{ render_title(metadata.title) }}
 {{ authors_ieee(metadata.authors, metadata.keywords) }}
