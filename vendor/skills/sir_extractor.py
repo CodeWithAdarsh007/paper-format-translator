@@ -860,6 +860,60 @@ _ORG_HINT_RE = re.compile(
     r"Research|Corporation|Corp\.?|Inc\.?|Ltd\.?|LLC|GmbH|School|College|Faculty|Center|Centre|"
     r"Academy|Hospital|Foundation|Company)\b", re.I)
 
+# Decorative macros whose argument is a symbol *name* ("peach", "blueberries"), not text.
+# Keeping the argument is how 2402.12424's \twemoji affiliation markers became fruit words
+# appended to the surnames: Yulong Chenblueberries, Lin Mapeach, Yue Zhanglemon.
+_AUTHOR_DECOR_RE = re.compile(
+    r"\\twemoji\s*\{[^{}]*\}|\\emoji\s*\{[^{}]*\}|\\symbol\s*\{[^{}]*\}"
+    r"|\\clubsuit\b|\\heartsuit\b|\\spadesuit\b|\\diamondsuit\b"
+    r"|\\color\s*\{[^{}]*\}")
+_TEXTCOLOR_UNWRAP_RE = re.compile(
+    r"\\textcolor\s*\{[^{}]*\}\s*\{((?:[^{}]|\{[^{}]*\})*)\}")
+
+# One entry in a line of names; a bare comma in "Doe, Jane" fails the >= 2 token test.
+_PERSON_ORG_RE = re.compile(r"[@\d&/]")
+
+_AUTHOR_NAME_DROP = (
+    r"\\inst\s*\{[^{}]*\}", r"\\orcidlink\s*\{[^{}]*\}",
+    r"\\footnotemark\s*(?:\[[^\]]*\])?", r"\\footnote\s*\{(?:[^{}]|\{[^{}]*\})*\}",
+    r"\\email\s*\{[^{}]*\}", r"\\affiliation\s*\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\}",
+    r"\\url\s*\{[^{}]*\}", r"\$?\^[^$]*\$?", r"\\textsuperscript\s*\{[^{}]*\}",
+    r"\\texttt\s*\{[^{}]*\}", r"\\hspace\*?\s*\{[^{}]*\}", r"\\hfill\b",
+    r"\\qquad\b", r"\\quad\b", r"\\\\", r"\\dagger\b", r"\\thanks",
+    r"\\bf\b", r"\\large\b", r"\*",
+)
+
+
+def _author_row_text(raw: str) -> str:
+    """Printable text of one ``\\\\``-separated row of an ``\\author`` block."""
+    s = _AUTHOR_DECOR_RE.sub(" ", raw)
+    s = _TEXTCOLOR_UNWRAP_RE.sub(r"\1", s)
+    s = re.sub(r"\\(?:q?quad)\b", ", ", s)
+    for pat in _AUTHOR_NAME_DROP:
+        s = re.sub(pat, " ", s)
+    return _clean_author_field(latex_to_text(s))
+
+
+def _person_list(text: str):
+    """The comma-separated names in *text*, or None when it is not a pure name list.
+
+    Only used for the second and later rows of an ``\\author`` block. Those rows are an
+    affiliation/email by convention, so the split needs to be conservative: a department line
+    ("Department of X, University of Y") or a placename ("Cambridge, MA") must not qualify.
+    """
+    parts = [p.strip() for p in text.split(",") if p.strip()]
+    if len(parts) < 2:
+        return None
+    for p in parts:
+        if _ORG_HINT_RE.search(p) or _PERSON_ORG_RE.search(p):
+            return None
+        toks = p.split()
+        if not 2 <= len(toks) <= 4:
+            return None
+        if not all(t[0].isupper() or (len(t) == 2 and t.endswith(".")) for t in toks):
+            return None
+    return parts
+
 
 def _author_rows(raw: str):
     """Split an author chunk on top-level ``\\\\`` line breaks, brace-aware.
@@ -900,7 +954,8 @@ def _clean_author_field(s: str) -> str:
     s = re.sub(r"\^\s*\d+", "", s or "")
     s = re.sub(r"\^\s*\{[^{}]*\}", "", s)
     s = s.replace("^", "")
-    return norm_ws(s)
+    s = norm_ws(s)
+    return re.sub(r"\s+([,.;:])", r"\1", s)
 
 
 def parse_authors(author_src: str, institute_src=None):
@@ -943,7 +998,7 @@ def parse_authors(author_src: str, institute_src=None):
             digits = re.findall(r"\d+", im.group(1))
             inst_idx = int(digits[0]) - 1 if digits else None
         aff = None
-        for affpat in (r"\\affiliation\s*\{", r"\\institution\s*\{"):
+        for affpat in (r"\\affiliation\s*\{", r"\\affil\s*\{", r"\\institution\s*\{"):
             am = re.search(affpat, raw)
             if am:
                 inner, _ = match_braces(raw, am.end() - 1)
@@ -953,24 +1008,41 @@ def parse_authors(author_src: str, institute_src=None):
         if aff is None and inst_idx is not None and 0 <= inst_idx < len(institutes):
             aff = institutes[inst_idx]
         rows = _author_rows(raw)
+        if rows and re.match(r"^\s*\\\\", raw):
+            # No name line of its own: this chunk is the group/organisation row that some
+            # templates put after a final separator ("\AND \\ OpenAI", "\AND \\ AMD, Inc.").
+            # It is an affiliation, never a person.
+            group = _author_row_text(rows[0])
+            if group:
+                if aff is None:
+                    aff = group
+                if authors and not authors[-1]["affiliation"]:
+                    authors[-1]["affiliation"] = aff
+            continue
         name_src = rows[0] if rows else raw
+        extra_names = []
         if aff is None:
-            rest = [r for r in rows[1:]
-                    if not re.search(r"\\texttt\s*\{[^{}]*@|\\url\s*\{", r)]
-            rest = [_clean_author_field(latex_to_text(r)) for r in rest]
-            rest = [r for r in rest if r]
+            rest = []
+            for r in rows[1:]:
+                if re.search(r"\\texttt\s*\{[^{}]*@|\\url\s*\{", r):
+                    continue
+                txt = _author_row_text(r)
+                if not txt:
+                    continue
+                people = _person_list(txt)
+                if people:
+                    extra_names.extend(people)
+                elif not rest:
+                    rest.append(txt)
             if rest:
                 aff = rest[0]
-        elif aff:
+        else:
             aff = _clean_author_field(aff)
-        for drop in (r"\\inst\s*\{[^{}]*\}", r"\\orcidlink\s*\{[^{}]*\}",
-                     r"\\footnotemark\s*(?:\[[^\]]*\])?", r"\\footnote\s*\{(?:[^{}]|\{[^{}]*\})*\}",
-                     r"\\email\s*\{[^{}]*\}", r"\\affiliation\s*\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\}",
-                     r"\\url\s*\{[^{}]*\}", r"\$?\^[^$]*\$?", r"\\textsuperscript\s*\{[^{}]*\}",
-                     r"\\texttt\s*\{[^{}]*\}", r"\\hspace\*?\s*\{[^{}]*\}", r"\\hfill\b",
-                     r"\\quad\b", r"\\qquad\b", r"\\\\", r"\\dagger\b", r"\\thanks"):
-            name_src = re.sub(drop, " ", name_src)
-        name = norm_ws(latex_to_text(name_src))
+        name = _author_row_text(name_src)
+        people = _person_list(name) if name else None
+        if people:
+            name, more = people[0], people[1:]
+            extra_names = more + extra_names
         if name:
             if (len(rows) <= 1 and aff is None and email is None and authors
                     and _ORG_HINT_RE.search(name)):
@@ -978,6 +1050,8 @@ def parse_authors(author_src: str, institute_src=None):
                     authors[-1]["affiliation"] = name
                 continue
             authors.append({"name": name, "affiliation": aff or None, "email": email or None})
+            for extra in extra_names:
+                authors.append({"name": extra, "affiliation": aff or None, "email": None})
     return authors
 
 
@@ -1165,6 +1239,8 @@ def extract_metadata(preamble: str, body: str, warnings: list):
         warnings.append("no \\title found")
     if not md["authors"]:
         warnings.append("no \\author found")
+    md["affiliations"] = list(dict.fromkeys(
+        a["affiliation"] for a in md["authors"] if a.get("affiliation")))
     ab = re.search(r"\\begin\s*\{abstract\}(.*?)\\end\s*\{abstract\}", body, re.S)
     if not ab:
         ab = re.search(r"\\begin\s*\{abstract\}(.*?)\\end\s*\{abstract\}", preamble, re.S)
