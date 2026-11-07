@@ -207,12 +207,8 @@
 {%- endfor %}
 \end{ {{- t -}} }
 
-{%- elif t == "figure_ref" -%}
-\ref{ {{- block.get("label") | citekey -}} }
-{%- elif t == "table_ref" -%}
-\ref{ {{- block.get("label") | citekey -}} }
-{%- elif t == "ref" -%}
-\ref{ {{- block.get("label") | citekey -}} }
+{%- elif t in ("figure_ref", "table_ref", "ref") -%}
+{{- block.get("xref") or ("\\ref{" ~ (block.get("label") | citekey) ~ "}") -}}
 {%- elif t == "float" -%}
 {%- if block.get("kind") == "table" -%}{{ render_table(block["float"]) }}
 {%- else -%}{{ render_figure(block["float"]) }}
@@ -245,14 +241,20 @@
 {% endif %}
 {% endif -%}
 {%- set heading_tex = render_with_math(heading, section.get("math_spans") or []) if heading is not none else "" -%}
+{#- ``numbered`` is False only when the source wrote \section*: an unnumbered heading must stay
+    unnumbered, or the paper gains numbered sections it never had (GPT-3's IX/X end matter). -#}
+{%- set hstar = "*" if section.get("numbered") is sameas false else "" -%}
 {%- if heading is not none and heading | trim -%}
-{%- if level == 1 %}\section{ {{- heading_tex -}} }
-{%- elif level == 2 %}\subsection{ {{- heading_tex -}} }
-{%- elif level == 3 %}\subsubsection{ {{- heading_tex -}} }
-{%- else %}\paragraph{ {{- heading_tex -}} }
+{%- if level == 1 %}\section{{ hstar }}{ {{- heading_tex -}} }
+{%- elif level == 2 %}\subsection{{ hstar }}{ {{- heading_tex -}} }
+{%- elif level == 3 %}\subsubsection{{ hstar }}{ {{- heading_tex -}} }
+{%- else %}\paragraph{{ hstar }}{ {{- heading_tex -}} }
 {%- endif %}
-{#- The source's own section label, so \ref{sec:...} resolves in the rebuilt document. -#}
+{#- The source's own section label, so \ref{sec:...} resolves in the rebuilt document.
+    extra_labels are \label commands the source wrote inside the section body rather than under
+    the heading; they refer to the same section counter, so they are emitted here too. -#}
 {%- if section.get("label") %} \label{ {{- section["label"] | citekey -}} }{% endif %}
+{%- for extra in section.get("extra_labels") or [] %} \label{ {{- extra | citekey -}} }{% endfor %}
 
 {%- elif level >= 1 %}\section{}
 
@@ -264,14 +266,23 @@
 
 {% macro render_figure(fig) -%}
 \begin{figure}[{{ FLOAT_PLACEMENT }}]
-\centering
 {%- if fig.get("path") %}
+\centering
 \includegraphics[width={{ float_width(format, fig.get("span")) }},totalheight=\PFTFigMaxHeight,keepaspectratio]{ {{- fig["path"] | graphpath -}} }
 {%- else %}
-\fbox{\textit{[Figure: the source drew this with TikZ/PGF, which this class does not load]}}
+{#- A figure whose graphic the source drew as instructions (TikZ/PGF, pstricks, an \input graph
+    file this pipeline did not inline) has no picture to place. It used to print
+    "[Figure: the source drew this with TikZ/PGF, which this class does not load]" 56 times
+    through GPT-3's body. The float stays, so the numbering, the \ref targets and the caption all
+    survive; the missing artwork is left as blank space, not as an error message in the reader's
+    paper. A \rule of zero width reserves a little height without typesetting anything. -#}
+\rule{0pt}{4pt}
 {%- endif %}
 \caption{ {{- render_with_math(fig.get("caption") or "", fig.get("math_spans") or []) -}}
 {%- if fig.get("label") %} \label{ {{- fig["label"] | citekey -}} }{% endif %} }
+{#- subfigure/subfloat panel labels live inside this float: emitted here so \ref{mmlupro} resolves
+    to the parent figure's number instead of being dropped as undefined. -#}
+{%- for panel in fig.get("panel_labels") or [] %} \label{ {{- panel | citekey -}} }{% endfor %}
 \end{figure}
 
 {%- endmacro %}

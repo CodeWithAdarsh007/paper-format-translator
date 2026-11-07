@@ -128,6 +128,22 @@ MATH_PLACEHOLDER_RE = re.compile(r"«MATH_\d+»")
 # canonical LaTeX at render time.
 XREF_PLACEHOLDER = "«XREF_{i}»"
 XREF_PLACEHOLDER_RE = re.compile(r"«XREF_\d+»")
+
+# ---- footnote positioning (Session 14A-2, Step F) ---------------------------------------------
+# ``normalise_leaky_macros`` flattens ``\footnote{text}`` to ``text`` because a note inside a
+# tabular body cannot be a real \\footnote (2303.08774's ``AMC 10\\footnotemark``), and inlining is
+# the only form that both compiles and keeps the sentence. In *prose* that costs the reader the
+# footnote apparatus entirely: GPT-3's zero-shot note landed in the middle of a sentence with no
+# separator. In prose the note is therefore wrapped in an ordered pair of markers that survive
+# flattening, and ``renderer.emit_footnote_markers`` turns the pair back into \\footnote{...} at
+# emit time, at the exact anchor the author chose.
+#
+# The markers deliberately avoid ``_``: protect_tex() escapes underscores, and a marker split by
+# that escape would print literally (the reason «MATH_<i>» needs the doubled-form regex in the
+# renderer). ``@`` is not a catcode character the flattener can touch.
+FNOTE_OPEN = "«FOOTOPEN@{i}»"
+FNOTE_CLOSE = "«FOOTCLOSE@{i}»"
+_FNOTE_MACRO_RE = re.compile(r"\\(?:footnote|footnotetext)\*?(?![A-Za-z])")
 _XREF_MACRO_RE = re.compile(
     r"\\(?:[A-Za-z]*[Cc]it[A-Za-z]*|apud|apudcn|apudnn|nocite"
     r"|cpageref|Cref|cref|autoref|nameref|eqref|refrange|vref|pageref|ref)\*?(?![A-Za-z])")
@@ -137,6 +153,28 @@ _LABEL_PREFIX_WORD = (("tab", "Table"), ("fig", "Figure"), ("sec", "Section"),
                       ("subsec", "Section"), ("app", "Appendix"), ("eqn", "Equation"),
                       ("eq", "Equation"), ("alg", "Algorithm"), ("thm", "Theorem"),
                       ("listing", "Listing"), ("lst", "Listing"))
+# Label namespaces are compared by *token*, not by whole-prefix equality: real papers write
+# ``app-sec:``, ``app-subsec:`` and ``subsec:`` (2402.12424 uses all three), and an exact match on
+# "tab"/"fig"/"sec" silently returned no type word for every one of them. Tokens are the parts of
+# the text before the first ``:`` split on ``-``/``_``.
+_LABEL_TOKEN_WORD = (
+    ({"app", "apps", "appendix", "appendices"}, "Appendix"),
+    ({"tab", "tabs", "table", "tables", "tbl"}, "Table"),
+    ({"fig", "figs", "figure", "figures"}, "Figure"),
+    ({"eq", "eqs", "eqn", "eqnarray", "equation", "equations"}, "Equation"),
+    ({"alg", "algs", "algorithm", "algorithms"}, "Algorithm"),
+    ({"lst", "listing", "listings", "code", "codesnippet"}, "Listing"),
+    ({"thm", "thms", "theorem", "theorems"}, "Theorem"),
+    ({"sec", "secs", "section", "sections", "subsec", "subsection", "subsections",
+      "subsubsec", "subsubsection", "s", "ss", "sss", "chapter", "part"}, "Section"),
+)
+# The tokens that make a label a *section* label rather than a float label. Used to bind an
+# orphan \label to the section it sits in.
+_SECTION_TOKENS = ("sec", "secs", "section", "sections", "subsec", "subsection",
+                   "subsections", "subsubsec", "subsubsection", "subsubsections",
+                   "s", "ss", "sss", "chapter", "part")
+
+
 _TYPE_WORD_BEFORE_RE = re.compile(
     r"(?:Fig(?:ure)?\.?|Tab(?:le)?\.?|Sec(?:tion)?\.?|Appendi[xc]|Eq(?:uation)?\.?|"
     r"List(?:ing)?\.?|Th(?:m|m|eorem)|Algor(?:ithm)?)[~ ]*$", re.I)
@@ -405,13 +443,96 @@ def _read_xref_args(text: str, pos: int):
     return opts, braces, consumed
 
 
+def _label_tokens(label: str) -> list:
+    """The namespace tokens of a label: ``app-sec:significance`` -> ``["app", "sec"]``."""
+    head = (label or "").split(":")[0].strip().lower()
+    return [t for t in re.split(r"[-_\s]+", head) if t]
+
+
 def _label_type_word(label: str) -> str:
-    """The word ``\\Cref``/``\\autoref`` would have printed, from the label's own prefix."""
-    low = (label or "").split(":")[0].strip().lower()
+    """The word ``\\Cref``/``\\autoref`` would have printed, from the label's own namespace."""
+    toks = set(_label_tokens(label))
+    for words, word in _LABEL_TOKEN_WORD:
+        if toks & words:
+            return word
     for prefix, word in _LABEL_PREFIX_WORD:
-        if low == prefix:
+        if (label or "").split(":")[0].strip().lower() == prefix:
             return word
     return ""
+
+
+def _is_section_label(label: str) -> bool:
+    """True when the label's namespace says it points at a sectioning command."""
+    toks = _label_tokens(label)
+    return any(t in _SECTION_TOKENS for t in toks)
+
+
+# ``\Cref{fig:a,fig:b}`` prints "Figures 1 and 2": one plural word, then the numbers joined in
+# prose. Mixed families print one word each ("Table 1, Figure 2"), which is what Session 14A-1
+# pinned in ``test_cref_resolved`` and is kept.
+_LABEL_WORD_PLURAL = {"Appendix": "Appendices", "Figure": "Figures", "Table": "Tables",
+                      "Section": "Sections", "Equation": "Equations", "Listing": "Listings",
+                      "Algorithm": "Algorithms", "Theorem": "Theorems"}
+# Macros that print the type word themselves. The target classes load neither cleveref nor
+# (in general) hyperref's autoref names, so the word has to be reconstructed at extraction time.
+_WORDY_REF_MACROS = ("cref", "autoref", "vref", "nameref")
+
+
+def _ref_parts(labs: list, macro: str, before: str = "", kind_of=None) -> list:
+    """The (word, label) pairs a reference renders as -- one entry per target.
+
+    ``macro`` is the name that was used (``ref``, ``Cref``, ``cref``, ``autoref``, ``pageref``…):
+    only the wordy family asks for a keyword, and the keyword is skipped when the sentence already
+    says it ("as shown in Table \\Cref{tab:x}" must not become "Table Table 3").
+    """
+    if not labs:
+        return []
+    wants_word = (macro or "ref").lower() in _WORDY_REF_MACROS
+    said = bool(_TYPE_WORD_BEFORE_RE.search(before or ""))
+    parts = []
+    for lab in labs:
+        word = ""
+        if wants_word and not said:
+            word = _label_type_word(lab)
+            if not word and kind_of:
+                # A label with an unrecognised namespace still has an owning environment from
+                # collect_label_kinds(); use that rather than dropping the word.
+                word = {"figure": "Figure", "table": "Table",
+                        "equation": "Equation"}.get(kind_of(lab) or "", "")
+        parts.append({"word": word, "label": lab})
+    return parts
+
+
+def ref_join(parts: list) -> str:
+    """Join reference parts the way the source macro would have printed them.
+
+    One target is ``Table~\\ref{tab:x}``. Several of the same family are
+    ``Figures~\\ref{fig:a} and~\\ref{fig:b}`` -- one plural word, then the numbers in prose, which
+    is what cleveref prints. Mixed families keep a word each ("Table~\\ref{tab:x},
+    Figure~\\ref{fig:y}"), the form Session 14A-1 pinned in ``test_cref_resolved``. The renderer
+    carries a copy of this function for the emit-time trim; ``test_ref_join_agrees_at_both_ends``
+    fails if the two ever disagree.
+    """
+    if not parts:
+        return ""
+    words = [(p.get("word") or "") for p in parts]
+    labs = [(p.get("label") or "") for p in parts]
+    if len(parts) == 1:
+        return ("%s~\\ref{%s}" % (words[0], labs[0])) if words[0] else "\\ref{%s}" % labs[0]
+    if len(set(words)) == 1 and words[0]:
+        head = _LABEL_WORD_PLURAL.get(words[0], words[0] + "s")
+        out = ["%s~\\ref{%s}" % (head, labs[0])]
+        rest = labs[1:]
+        for i, lab in enumerate(rest):
+            out.append((" and~\\ref{%s}" if i == len(rest) - 1 else ", ~\\ref{%s}") % lab)
+        return "".join(out)
+    return ", ".join(("%s~\\ref{%s}" % (w, lab)) if w else ("\\ref{%s}" % lab)
+                     for w, lab in zip(words, labs))
+
+
+def _ref_latex(labs: list, macro: str, before: str = "", kind_of=None) -> str:
+    """Canonical ``\\ref`` LaTeX for *labs*, with the type word the source macro implied."""
+    return ref_join(_ref_parts(labs, macro, before, kind_of))
 
 
 def extract_xref_spans(text: str, spans: list, warnings: list = None) -> str:
@@ -447,13 +568,7 @@ def extract_xref_spans(text: str, spans: list, warnings: list = None) -> str:
         else:
             labs = [k.strip() for k in re.split(r"[,;]", braces[-1] if braces else "") if k.strip()]
             if labs:
-                wants_word = name.lower() in ("cref", "autoref", "vref", "nameref")
-                said = bool(_TYPE_WORD_BEFORE_RE.search(text[:m.start()]))
-                parts = []
-                for lab in labs:
-                    word = _label_type_word(lab) if (wants_word and not said) else ""
-                    parts.append(("%s~\\ref{%s}" % (word, lab)) if word else ("\\ref{%s}" % lab))
-                latex = ", ".join(parts)
+                latex = _ref_latex(labs, name, text[:m.start()])
             else:
                 warn.append("empty_ref_argument")
         out.append(text[i:m.start()])
@@ -570,9 +685,47 @@ def normalise_leaky_macros(text: str, warnings: list = None) -> str:
     return "".join(out)
 
 
-def text_with_math(raw: str, warnings: list = None):
+def extract_footnote_markers(text: str, warnings: list = None):
+    """Wrap each prose ``\\footnote{...}`` in an open/close marker pair, keeping its argument raw.
+
+    The argument stays in the running text, so math, citations and links inside a footnote are
+    lifted by the normal passes and their placeholders stay index-consistent. Only the outermost
+    note is marked: a ``\\footnote`` nested inside another is illegal LaTeX, and leaving the inner
+    one to be inlined is the right reading of a source that should not have written it.
+
+    Returns ``(text_with_markers, marked_count)``.
+    """
+    if not text or not _FNOTE_MACRO_RE.search(text):
+        return text, 0
+    out, i, n = [], 0, 0
+    while True:
+        m = _FNOTE_MACRO_RE.search(text, i)
+        if not m:
+            out.append(text[i:])
+            break
+        _opts, braces, after = _read_xref_args(text, m.end())
+        arg = braces[-1] if braces else None
+        out.append(text[i:m.start()])
+        if arg and arg.strip():
+            out.append(FNOTE_OPEN.format(i=n) + arg + FNOTE_CLOSE.format(i=n))
+            n += 1
+        elif not arg:
+            (warnings if warnings is not None else []).append("empty_footnote_argument")
+        i = max(after, m.end())
+    return "".join(out), n
+
+
+def text_with_math(raw: str, warnings: list = None, footnotes: bool = False):
     """Raw LaTeX -> (plain text with placeholders, math spans). The one entry point every
-    text-bearing SIR field goes through since v2."""
+    text-bearing SIR field goes through since v2.
+
+    ``footnotes=True`` is for prose (paragraphs, list items, an unrecognised environment's body):
+    it marks real footnotes so the renderer can emit them as ``\\footnote{}``. Captions, the
+    abstract and headings leave it off and keep the Session 14A-1 inlined form, which is what made
+    2303.08774 compile.
+    """
+    if footnotes and raw:
+        raw, _n = extract_footnote_markers(raw, warnings)
     clean, spans = extract_math_spans(raw or "", warnings)
     clean = extract_xref_spans(clean, spans, warnings)
     clean = normalise_leaky_macros(clean, warnings)
@@ -1334,6 +1487,15 @@ def parse_figure(inner: str, warnings: list):
         lab = _LABEL_RE.search(inner)
         if lab:
             fig["label"] = lab.group(1).strip()
+    # ``\begin{subfigure}{}`` / ``\subfloat`` panels carry their own \label inside the parent float
+    # (2501.12948 appendix.tex:682 \label{mmlupro}). Only the parent becomes a SIR figure, so those
+    # targets were defined nowhere and the body's "As illustrated in Figure~\ref{mmlupro}" printed a
+    # keyword with no number. They are recorded here and emitted inside the parent float, where
+    # LaTeX resolves them to the parent's number -- which is the panel's own figure.
+    panels = [m.group(1).strip() for m in _LABEL_RE.finditer(inner)
+              if m.group(1).strip() and m.group(1).strip() != fig["label"]]
+    if panels:
+        fig["panel_labels"] = panels
     return fig
 
 
@@ -1408,12 +1570,12 @@ def parse_list(inner: str, kind: str, warnings: list = None):
     parts = re.split(r"\\item\b(?:\[[^\]]*\])?", inner)
     items, item_spans = [], []
     for chunk in parts[1:]:
-        txt, spans = text_with_math(chunk, warnings)
+        txt, spans = text_with_math(chunk, warnings, footnotes=True)
         if txt:
             items.append(txt)
             item_spans.append(spans)
     if not items:
-        txt, spans = text_with_math(parts[0], warnings)
+        txt, spans = text_with_math(parts[0], warnings, footnotes=True)
         if txt:
             items, item_spans = [txt], [spans]
     block = {"type": kind, "items": items}
@@ -1800,6 +1962,8 @@ def scan_blocks(text: str, ctx: dict, depth: int = 0):
                     ctx["figures"].append(f)
                     if f["label"]:
                         ctx["labels"].setdefault(f["label"], f["caption"] or "")
+                    for panel in f.get("panel_labels") or []:
+                        ctx["labels"].setdefault(panel, f["caption"] or "")
             elif env in TABLE_ENVS:
                 t = parse_table(inner, ctx["warnings"], env=env, whole=text[start:end])
                 if t["label"] or t["caption"] or t["latex"]:
@@ -1819,7 +1983,7 @@ def scan_blocks(text: str, ctx: dict, depth: int = 0):
             elif depth < 6 and env not in ("verbatim", "lstlisting", "minted"):
                 blocks.extend(scan_blocks(inner, ctx, depth + 1))
             else:
-                txt, spans = text_with_math(inner, ctx["warnings"])
+                txt, spans = text_with_math(inner, ctx["warnings"], footnotes=True)
                 if txt:
                     block = {"type": "paragraph", "text": txt}
                     if spans:
@@ -1835,26 +1999,59 @@ def scan_blocks(text: str, ctx: dict, depth: int = 0):
             blocks.append({"type": "citation", "keys": payload})
             ctx["n_cites"] += 1
         elif kind == "ref":
-            lab, rkind = payload
+            lab, rkind, macro, rlabels = payload
             lab = (lab or "").strip()
-            if not lab:
+            labs = rlabels or ([lab] if lab else [])
+            if not labs:
                 ctx["warnings"].append("empty_ref_argument")
-            elif rkind == "figure":
-                blocks.append({"type": "figure_ref", "label": lab})
-            elif rkind == "table":
-                blocks.append({"type": "table_ref", "label": lab})
             else:
-                # A \ref whose target is a section, equation or any other label used to be
-                # discarded here, because only floats are anchored. That is what turned the
-                # source's "described in Section \ref{sec:sft_data}." into "described in
-                # Section ." in the reader's PDF. The reference itself has to survive.
-                blocks.append({"type": "ref", "label": lab})
+                # "Table VI", not "VI": the word the source macro would have printed, and the
+                # canonical LaTeX the template emits verbatim. `label` stays the first target so
+                # renderer.anchor_floats() still finds the float this sentence cites.
+                parts = _ref_parts(labs, macro, text[pos:start],
+                                   kind_of=(lambda k: ctx["label_kinds"].get(k))
+                                   if ctx.get("label_kinds") else None)
+                block = {"type": "ref", "label": labs[0], "refs": parts,
+                         "xref": ref_join(parts)}
+                if len(labs) > 1:
+                    block["labels"] = labs
+                if rkind == "figure":
+                    block["type"] = "figure_ref"
+                elif rkind == "table":
+                    block["type"] = "table_ref"
+                blocks.append(block)
         elif kind == "noop":
             ctx["warnings"].append(f"unclosed environment: {payload}")
         elif kind == "section":
             break
         pos = max(end, pos + 1)
     return blocks
+
+
+def _footnote_arg_ranges(text: str) -> list:
+    """``[start, end)`` of every ``\\footnote{...}`` argument in *text*, outermost only."""
+    ranges = []
+    for m in _FNOTE_MACRO_RE.finditer(text):
+        _opts, braces, after = _read_xref_args(text, m.end())
+        if not braces:
+            continue
+        # The argument is the first top-level group; its end is where scanning stopped for it.
+        start = text.index("{", m.end()) if "{" in text[m.end():after] else m.end()
+        ranges.append((start, after))
+    return ranges
+
+
+def _inside_footnote(text: str, pos: int) -> bool:
+    """True when *pos* falls inside a footnote argument.
+
+    ``_next_construct`` treats every ``\\cite``/``\\ref`` as a block boundary, which used to cut a
+    footnote in half before ``paragraphs`` ever saw it: GPT-3's ``...meta-learning\\footnote{In the
+    context of language models this has been called...}`` came out as two paragraphs with a
+    detached parenthesis, and 2303.08774 hides ``\\footnote{\\href{u}{u}}`` the same way. Inside a
+    note the citation is handled by ``extract_xref_spans`` on the intact argument instead, so the
+    note stays one unit and the marker pair around it stays balanced.
+    """
+    return any(start <= pos < end for start, end in _footnote_arg_ranges(text))
 
 
 def _next_construct(text: str, pos: int, kinds=None):
@@ -1890,13 +2087,19 @@ def _next_construct(text: str, pos: int, kinds=None):
         stop = close.start() if close else len(text)
         cands.append(("math", m.start(), (close.end() if close else len(text)), text[m.end():stop]))
     m = _CITE_RE.search(text, pos)
-    if m:
+    if m and not _inside_footnote(text, m.start()):
         keys = _read_cite_args(text, m.end())
         cands.append(("cite", m.start(), _args_end(text, m.end()), keys))
     m = _REF_RE.search(text, pos)
-    if m:
+    if m and not _inside_footnote(text, m.start()):
         lab = _read_first_arg(text, m.end())
-        cands.append(("ref", m.start(), _args_end(text, m.end()), (lab, kinds.get(lab) if lab else None)))
+        # The macro *name* has to travel with the target: \Cref and \autoref print a type word
+        # ("Table VI") that a plain \ref does not, and the block path is where most references in
+        # these papers land. Dropping the name here is what turned "In \Cref{tab:x}" into "In VI".
+        macro = m.group(0).lstrip("\\").rstrip("*")
+        labels = [k.strip() for k in re.split(r"[,;]", lab or "") if k.strip()]
+        cands.append(("ref", m.start(), _args_end(text, m.end()),
+                      (lab, kinds.get(lab) if lab else None, macro, labels)))
     m = _SECTION_RE.search(text, pos)
     if m:
         cands.append(("section", m.start(), m.end(), None))
@@ -1971,13 +2174,53 @@ def paragraphs(chunk: str, warnings: list = None):
     the renderer later emits ``∈`` outside math mode, which pdflatex rejects per character."""
     out = []
     for part in re.split(r"\n\s*\n", chunk):
-        txt, spans = text_with_math(part, warnings)
+        txt, spans = text_with_math(part, warnings, footnotes=True)
         if txt and re.search(r"[A-Za-z0-9]", txt):
             block = {"type": "paragraph", "text": txt}
             if spans:
                 block["math_spans"] = spans
             out.append(block)
     return out
+
+
+def _bind_region_labels(section: dict, region_text: str, ctx: dict):
+    """Give a section the ``\\label`` the source wrote *inside* its body instead of under its heading.
+
+    ``build_sections`` used to accept a heading label only when it was adjacent to the heading, so
+    three real source shapes lost it and every ``\\ref`` to it became a stranded keyword:
+    ``\\section{X}\\input{graphs/fig.tex}\\label{section:x}`` (2005.14165 main.tex:267-269), and a
+    bare ``\\label{sec: evaluation_set}`` sitting mid-prose (2501.12948 appendix.tex:415, :788).
+    In LaTeX a ``\\label`` with no intervening stepped counter refers to the current section, so
+    binding it is the faithful reading, not a guess.
+
+    Only a label that (a) is section-family, (b) no figure, table or equation already claims, and
+    (c) no other section has taken, is bound -- and only to a section that has no label yet, so a
+    heading's own label is never overwritten.
+    """
+    if section.get("level", 0) < 1 or not region_text or "\\" not in region_text:
+        return
+    claimed = ctx.get("labels") or {}
+    taken = ctx.setdefault("section_labels", set())
+    own = re.sub(r"\s+", "", (section.get("label") or "")).lower()
+    for m in _LABEL_RE.finditer(region_text):
+        lab = (m.group(1) or "").strip()
+        if not lab or not _is_section_label(lab):
+            continue
+        key = re.sub(r"\s+", "", lab).lower()
+        # The heading's own label is inside this region too (the region starts at the closing
+        # brace), so it must not be re-bound as a second \label of the same section.
+        if key == own or key in claimed or key in taken:
+            continue
+        if section.get("label"):
+            # The heading already owns a label; a second one in the body still has to be defined
+            # or a \ref to it resolves to nothing, so record it alongside rather than discarding it.
+            extra = section.setdefault("extra_labels", [])
+            extra.append(lab)
+            taken.add(key)
+            continue
+        section["label"] = lab
+        taken.add(key)
+        return
 
 
 def build_sections(body: str, ctx: dict):
@@ -2008,12 +2251,20 @@ def build_sections(body: str, ctx: dict):
         # Which section a float was declared in is the anchor renderer.anchor_floats() falls back to
         # when the body never cites it, so the ordinal has to be in ctx before the region is scanned.
         ctx["section_index"] = len(sections)
-        cur["blocks"].extend(region(body[pos:m.start()]))
+        region_text = body[pos:m.start()]
+        cur["blocks"].extend(region(region_text))
+        _bind_region_labels(cur, region_text, ctx)
         if cur["blocks"] or cur["heading"] is not None:
             sections.append(cur)
         heading_src, heading_spans = extract_math_spans(inner, ctx["warnings"])
         cur = {"level": _SECTION_LEVEL.get(name, 1), "heading": clean_heading(heading_src),
                "blocks": []}
+        # ``\section*{Acknowledgements}`` is a heading the author deliberately did not number.
+        # _SECTION_RE matches the star and used to discard it, so GPT-3's two unnumbered end-matter
+        # headings came out as "IX. Acknowledgements" and "X. Contributions" -- two numbered
+        # sections the source does not have. Recorded here, emitted by the templates.
+        if re.match(r"\\%s\s*\*" % re.escape(name), m.group(0)):
+            cur["numbered"] = False
         # A section's own ``\label`` is how ``\ref{sec:approach}`` resolves. The rebuilt document
         # re-numbers headings, so without carrying the label the reference is defined nowhere and
         # LaTeX prints ?? -- which is why this is part of the same fix as the blank cross-refs.
@@ -2030,7 +2281,9 @@ def build_sections(body: str, ctx: dict):
             cur["math_spans"] = heading_spans
         pos = after
     ctx["section_index"] = len(sections)
-    cur["blocks"].extend(region(body[pos:]))
+    tail = body[pos:]
+    cur["blocks"].extend(region(tail))
+    _bind_region_labels(cur, tail, ctx)
     if cur["blocks"] or cur["heading"] is not None or not sections:
         sections.append(cur)
     return sections

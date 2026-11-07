@@ -294,6 +294,29 @@ def protect_tex_unicode(s):
 _PLACEHOLDER_RE = re.compile(r"«(?:MATH|XREF)\\?_(\d+)»")
 _PLACEHOLDER_SPLIT_RE = re.compile(r"(«(?:MATH|XREF)\\?_\d+»)")
 
+# The prose footnote markers ``sir_extractor.extract_footnote_markers`` leaves around a note's
+# argument. They carry no index into the span list, so they are resolved here rather than in
+# ``math_delimited``, and they never need escaping (no catcode character in them).
+_FOOT_OPEN_RE = re.compile(r"«FOOTOPEN@(\d+)»")
+_FOOT_CLOSE_RE = re.compile(r"«FOOTCLOSE@(\d+)»")
+
+
+def emit_footnote_markers(tex):
+    """Turn the extractor's prose footnote marker pair into a real ``\\footnote{...}``.
+
+    Balance is checked before anything is emitted: an unmatched pair would open a group LaTeX never
+    closes and cost the whole document, so an unbalanced field falls back to the Session 14A-1 form
+    (note text inline, no apparatus), which is always safe to compile.
+    """
+    if not tex or ("«FOOTOPEN@" not in tex and "«FOOTCLOSE@" not in tex):
+        return tex
+    if len(_FOOT_OPEN_RE.findall(tex)) != len(_FOOT_CLOSE_RE.findall(tex)):
+        return _FOOT_CLOSE_RE.sub("", _FOOT_OPEN_RE.sub("", tex))
+    # A lambda replacement, not a template string: re.sub interprets escapes in its replacement,
+    # so a template of "\footnote{" would insert a form feed (\f) and print garbage.
+    tex = _FOOT_OPEN_RE.sub(lambda m: BS + "footnote{", tex)
+    return _FOOT_CLOSE_RE.sub("}", tex)
+
 
 def _live_dollar_positions(s):
     """Indexes of ``$`` preceded by an even number of backslashes.
@@ -381,8 +404,9 @@ def render_with_math(text, math_spans=None):
     if not math_spans:
         # The placeholders are internal sentinels: a field that still carries one has lost its
         # spans somewhere (v1 SIR, or a template that forgot to pass them), and printing «MATH_0»
-        # is worse than dropping the span.
-        return _PLACEHOLDER_RE.sub("", protect_tex_unicode(text))
+        # is worse than dropping the span. Footnote markers need no span, so they are still
+        # resolved here.
+        return emit_footnote_markers(_PLACEHOLDER_RE.sub("", protect_tex_unicode(text)))
     spans = {}
     for span in math_spans:
         if not isinstance(span, dict):
@@ -392,7 +416,7 @@ def render_with_math(text, math_spans=None):
         except (TypeError, ValueError):
             continue
     if not spans:
-        return _PLACEHOLDER_RE.sub("", protect_tex_unicode(text))
+        return emit_footnote_markers(_PLACEHOLDER_RE.sub("", protect_tex_unicode(text)))
 
     def swap(m):
         span = spans.get(int(m.group(1)))
@@ -406,7 +430,7 @@ def render_with_math(text, math_spans=None):
             parts.append(part)
         else:
             parts.append(protect_tex_unicode(part))
-    return _PLACEHOLDER_RE.sub(swap, "".join(parts))
+    return emit_footnote_markers(_PLACEHOLDER_RE.sub(swap, "".join(parts)))
 
 
 def citekey(s):
@@ -422,6 +446,65 @@ def citekey(s):
 # arrives as paragraph/citation/paragraph/citation/paragraph. LaTeX joins the pieces with a space
 # only if there is no blank line between them, so the template must not put one there.
 _INLINE_BLOCK_TYPES = {"citation", "figure_ref", "table_ref", "ref"}
+
+
+# Emit-time copy of ``sir_extractor.ref_join``: a reference is assembled by the extractor, but a
+# *partially* unresolvable one (two targets, one of whose section or listing the class never
+# reproduces) can only be trimmed here, where the set of defined labels is known. The copy exists
+# for the same reason the directive-leak list is duplicated: the test suite loads these modules by
+# path and the renderer may be bound to a vendored copy. ``test_ref_join_agrees_at_both_ends``
+# fails if the two implementations ever disagree.
+_REF_WORD_PLURAL = {"Appendix": "Appendices", "Figure": "Figures", "Table": "Tables",
+                    "Section": "Sections", "Equation": "Equations", "Listing": "Listings",
+                    "Algorithm": "Algorithms", "Theorem": "Theorems"}
+_REF_WORD_SINGULAR = {v: k for k, v in _REF_WORD_PLURAL.items()}
+_REF_PIECE_RE = re.compile(
+    r"(?:(%s)~)?\\ref\{([^{}]*)\}"
+    % "|".join(sorted(set(_REF_WORD_PLURAL) | set(_REF_WORD_PLURAL.values()), key=len, reverse=True)))
+
+
+def ref_join(parts):
+    """Join ``(word, label)`` reference parts exactly as ``sir_extractor.ref_join`` does."""
+    if not parts:
+        return ""
+    words = [(p.get("word") or "") for p in parts]
+    labs = [(p.get("label") or "") for p in parts]
+    if len(parts) == 1:
+        return ("%s~\\ref{%s}" % (words[0], labs[0])) if words[0] else "\\ref{%s}" % labs[0]
+    if len(set(words)) == 1 and words[0]:
+        head = _REF_WORD_PLURAL.get(words[0], words[0] + "s")
+        out = ["%s~\\ref{%s}" % (head, labs[0])]
+        rest = labs[1:]
+        for i, lab in enumerate(rest):
+            out.append((" and~\\ref{%s}" if i == len(rest) - 1 else ", ~\\ref{%s}") % lab)
+        return "".join(out)
+    return ", ".join(("%s~\\ref{%s}" % (w, lab)) if w else ("\\ref{%s}" % lab)
+                     for w, lab in zip(words, labs))
+
+
+def split_ref_pieces(xref):
+    """``"Figures~\\ref{a} and~\\ref{b}"`` -> the parts ``ref_join`` would have produced.
+
+    ``ref_join`` prints one plural word for a same-family group and leaves the later targets
+    bare, so the head word is propagated to them and singularised: the parts a trim rebuilds from
+    must carry the family word, not the printed surface form.
+    """
+    out = []
+    for w, lab in _REF_PIECE_RE.findall(xref or ""):
+        if w:
+            out.append({"word": _REF_WORD_SINGULAR.get(w, w), "label": lab})
+        else:
+            out.append({"word": out[-1]["word"] if out else "", "label": lab})
+    return out
+
+
+def ref_targets(block):
+    """Every label a reference block points at, whichever SIR generation produced it."""
+    parts = block.get("refs")
+    if parts:
+        return [p.get("label") for p in parts if isinstance(p, dict) and p.get("label")]
+    lab = block.get("label") or ""
+    return [k.strip() for k in re.split(r"[,;]", lab) if k.strip()]
 
 
 def defined_labels(sections, figures, tables, equations, label_map=None):
@@ -442,10 +525,18 @@ def defined_labels(sections, figures, tables, equations, label_map=None):
     for s in sections or []:
         if isinstance(s, dict) and (s.get("heading") or "").strip():
             add(s.get("label"))
+            # \label commands the source wrote inside the section body (see _bind_region_labels):
+            # the template emits them on the heading line, so they are defined and must not be
+            # judged missing here.
+            for extra in s.get("extra_labels") or []:
+                add(extra)
     for coll in (figures or [], tables or []):
         for f in coll:
             if isinstance(f, dict):
                 add(f.get("label"))
+                # subfigure/subfloat panel labels, emitted inside the parent float by _shared.j2
+                for panel in f.get("panel_labels") or []:
+                    add(panel)
                 add(_LABEL_IN_TEX_RE.search(f.get("latex") or ""))
     for e in equations or []:
         if isinstance(e, dict):
@@ -468,21 +559,51 @@ def drop_unresolved_refs(sections, figures, tables, equations, defined, warnings
     """
     dropped = []
 
-    def resolvable(label):
-        return not label or citekey(label) in defined
-
     for s in sections or []:
         if not isinstance(s, dict):
             continue
         keep, removed = [], 0
         for b in s.get("blocks") or []:
-            if isinstance(b, dict) and b.get("type") in ("ref", "figure_ref", "table_ref") \
-                    and not resolvable(b.get("label")):
-                removed += 1
+            if isinstance(b, dict) and b.get("type") in ("ref", "figure_ref", "table_ref"):
+                # Put every target through citekey before comparing, exactly as _clean_span_refs
+                # does for the inline path: 2402.12424 writes \label{tab: my-table} with a space
+                # inside the braces, the template cleans the \label, and \ref{tab: my-table} vs
+                # \label{tab:my-table} are the same key to LaTeX but not to this check.
+                if b.get("xref") and re.search(r"\\ref\{[^{}]*[ \t][^{}]*\}", b["xref"]):
+                    b = dict(b)
+                    b["xref"] = re.sub(r"\\ref\{([^{}]*)\}",
+                                       lambda m: "\\ref{%s}" % ",".join(
+                                           citekey(x) for x in m.group(1).split(",") if x.strip()),
+                                       b["xref"])
+                    b["refs"] = split_ref_pieces(b["xref"])
+                labs = ref_targets(b)
+                bad = [l for l in labs if citekey(l) not in defined]
+                if not bad:
+                    keep.append(b)
+                    continue
+                if len(bad) == len(labs):
+                    # Nothing in the reference resolves: drop the block, keyword and all, so the
+                    # sentence loses the citation rather than printing "Section ," at its reader.
+                    removed += 1
+                    continue
+                # Part of a multi-target reference resolves ("Figures 3 and 7" where only 3
+                # exists): keep the targets the document defines instead of deleting the whole
+                # reference, which is what the old single-label check did to every group ref.
+                b = dict(b)
+                parts = [p for p in (b.get("refs") or split_ref_pieces(b.get("xref") or ""))
+                         if citekey(p.get("label") or "") in defined]
+                b["refs"] = parts
+                b["xref"] = ref_join(parts)
+                b["label"] = parts[0].get("label") or ""
+                keep.append(b)
                 continue
             keep.append(b)
-        if removed:
+        # The list is always written back: a reference can be *rewritten* (citekey cleaning,
+        # trimming one dead target of a group) without anything being dropped, and assigning only
+        # when `removed` is set silently discarded those edits.
+        if keep != s.get("blocks"):
             s["blocks"] = keep
+        if removed:
             dropped.append(removed)
         _clean_span_refs(s.get("math_spans"), defined, dropped)
         for b in s.get("blocks") or []:
@@ -533,8 +654,12 @@ def _clean_span_refs(spans, defined, dropped, items=False):
             keys = [k.strip() for t in targets for k in t.split(",")]
             if all(citekey(k) in defined for k in keys):
                 continue
-            span["xref"] = ""
-            dropped.append(1)
+            parts = [p for p in split_ref_pieces(xref) if citekey(p["label"]) in defined]
+            if not parts:
+                span["xref"] = ""
+                dropped.append(1)
+                continue
+            span["xref"] = ref_join(parts)
 
 
 def mark_appendix_break(sections):
