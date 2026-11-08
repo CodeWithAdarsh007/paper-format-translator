@@ -1,0 +1,74 @@
+cff-version: 1.2.0
+message: "If you use this software or the arXiv-MFT corpus, please cite the entries below."
+
+# Published 2026-11-08. Zenodo DOI for the dataset: 10.5281/zenodo.24054291
+
+preferred-citation:
+  type: software
+  title: "Paper Format Translator"
+  authors:
+    - family-names: Pandey
+      given-names: Adarsh
+      email: engineer.adarshpandey@gmail.com
+  repository-code: "https://github.com/CodeWithAdarsh007/paper-format-translator"
+  url: "https://paper-format-translator.streamlit.app/"
+  version: "8fab304"
+  date-released: 2026-11-08
+  license: MIT
+  keywords:
+    - latex
+    - format-conversion
+    - scientific-documents
+    - document-ai
+    - reproducibility
+  abstract: >-
+    Deterministic cross-venue translation of scientific LaTeX documents
+    (arXiv source to IEEE, ACM and Springer LNCS) through a Structured
+    Intermediate Representation and per-class Jinja2 templates, with a
+    four-gate verification methodology for content preservation.
+
+references:
+  - type: dataset
+    title: >-
+      arXiv-MFT v3: a licence-verified corpus of 810 arXiv papers with
+      all-three-format recompile status
+    authors:
+      - family-names: Pandey
+        given-names: Adarsh
+        email: engineer.adarshpandey@gmail.com
+    repository-code: "https://github.com/CodeWithAdarsh007/paper-format-translator"
+    url: "https://doi.org/10.5281/zenodo.24054291"
+    doi: 10.5281/zenodo.24054291
+    version: 3.0.0
+    date-released: 2026-11-08
+    license: CC-BY-4.0
+    keywords:
+      - dataset
+      - arxiv
+      - latex
+      - document-structure
+    abstract: >-
+      810 arXiv papers, each of which recompiled successfully into all three
+      target venue classes, drawn from 1,533 licence-cleared candidates and
+      1,419 downloaded source trees, with an 80/10/10 split by paper ID.
+      Licence verification: 736 CC-BY-4.0, 60 CC-BY-SA-4.0, 14 CC0-1.0;
+      810 of 810 on the allowlist, none off-list. Source LaTeX trees are not
+      redistributed; papers are referenced by arXiv identifier.
+
+  - type: report
+    title: >-
+      Paper Format Translator: format-preserving translation of scientific
+      LaTeX documents through a structured intermediate representation
+    authors:
+      - family-names: Pandey
+        given-names: Adarsh
+        email: engineer.adarshpandey@gmail.com
+    repository-code: "https://github.com/CodeWithAdarsh007/paper-format-translator"
+    url: "https://github.com/CodeWithAdarsh007/paper-format-translator/blob/main/docs/report_final.md"
+    year: 2026
+    month: 11
+    note: >-
+      Undergraduate technical report, 1.0, consolidated 2026-11-08. Sections
+      2 (Abstract), 5 (Introduction), 12 (Conclusion) and the Acknowledgments
+      are published as first drafts and are to be rewritten by the author
+      before any formal submission.

@@ -1,3 +1,56 @@
+# Python
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+env/
+
+# Test / tooling scratch — pytest on Windows needs a workspace-local basetemp
+tmp/
+.pytest_tmp/
+*.log
+
+# TeX compilation artefacts (never commit these; the .tex source is the artefact we ship)
+*.aux
+*.log
+*.out
+*.toc
+*.lof
+*.lot
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+*.bbl
+*.blg
+*.run.xml
+*.spl
+*.nav
+*.snm
+*.vrb
+
+# Backups taken beside edited files (e.g. streamlit_app.py.bak14a1) — local safety net, not history
+*.bak
+*.bak[0-9]*
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Secrets and local config — Credentials.txt is intentionally never committed
+Credentials.txt
+credential.txt
+.env
+*.key
+*.pem
+kaggle.json
+access_token
