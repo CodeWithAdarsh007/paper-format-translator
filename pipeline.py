@@ -103,14 +103,23 @@ def _normalise_figure_path(raw) -> str:
 
 
 def _figure_paths(sir: dict) -> list[str]:
+    """Every graphic the SIR names, in figure order then panel order.
+
+    Session 14C: a multi-panel float stores its images in ``panels``, so copying only ``path``
+    referenced panel (b) without ever putting the file in the build tree -- which turns a restored
+    panel into a "File ... not found" TeX error instead of a fixed figure.
+    """
     seen, out = set(), []
     for fig in sir.get("figures") or []:
-        if not isinstance(fig, dict) or not fig.get("path"):
+        if not isinstance(fig, dict):
             continue
-        p = _normalise_figure_path(fig["path"])
-        if p and p.lower() not in seen:
-            seen.add(p.lower())
-            out.append(p)
+        raw = [p.get("path") for p in fig.get("panels") or [] if isinstance(p, dict)]
+        candidates = [c for c in raw if c] or ([fig["path"]] if fig.get("path") else [])
+        for cand in candidates:
+            p = _normalise_figure_path(cand)
+            if p and p.lower() not in seen:
+                seen.add(p.lower())
+                out.append(p)
     return out
 
 

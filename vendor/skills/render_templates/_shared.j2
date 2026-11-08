@@ -77,6 +77,15 @@
 % that already did is a no-op (probed: acmart + \usepackage{caption} compiles clean).
 \IfFileExists{caption.sty}{\usepackage{caption}}{}
 \ifcsname captionof\endcsname\else\providecommand{\captionof}[2]{ #1: #2}\fi
+% Multi-panel floats (Session 14C): a \subfigure / \begin{subfigure} block stores every panel in the
+% SIR now, and render_figure lays them out as subfigure environments so panel (b) of 2501.12948 Fig 1
+% and Fig 9 is typeset instead of dropped. subcaption owns that environment and must load after
+% caption; if the package is absent the same layout still compiles as a plain minipage, so the
+% artwork is never lost for the want of a style file. The legacy subfigure package is deliberately
+% not loaded -- it is option-contradictory with subcaption. The fallback argument is written with a
+% space after its opening brace because a hash immediately after an open brace opens a Jinja comment,
+% which would otherwise swallow the rest of the template.
+\IfFileExists{subcaption.sty}{\usepackage{subcaption}}{\newenvironment{subfigure}[2][]{\begin{minipage}{ #2}}{\end{minipage}}}
 {%- endmacro %}
 
 {% macro render_content_support() -%}
@@ -315,10 +324,30 @@
 -#}
 {%- set span = fig.get("span") %}
 {%- set fenv = "figure*" if span else "figure" %}
+{#- A \subfigure / \begin{subfigure} float holds several graphics and the extractor now keeps them
+    all in "panels": parse_figure used to store only the first, so 2501.12948 Fig 1 printed panel (a)
+    and silently destroyed panel (b) while the (b) prose in the parent caption survived, which is what
+    made it read as a layout problem. One panel -- which is what a source whose panels are already
+    merged into a single image produces -- takes the single-graphic branch below, unchanged.
+    Panel captions deliberately carry no \label: the parent float emits every label through
+    panel_labels exactly as before, so \ref behaviour is untouched and no label is defined twice. -#}
+{%- set panels = fig.get("panels") or ([{"path": fig["path"], "caption": ""}] if fig.get("path") else []) %}
+{%- set npanel = panels | length %}
+{%- set base = float_width(format, span) %}
 \begin{ {{- fenv -}} }[{{ float_placement(span) }}]
-{%- if fig.get("path") %}
+{%- if npanel > 1 %}
 \centering
-\includegraphics[width={{ float_width(format, fig.get("span")) }},totalheight=\PFTFigMaxHeight,keepaspectratio]{ {{- fig["path"] | graphpath -}} }
+{%- for p in panels %}
+\begin{subfigure}[b]{0.48 {{- base -}} }\centering
+\includegraphics[width=\linewidth{%- if npanel <= 2 %},totalheight=\PFTFigMaxHeight{%- endif %},keepaspectratio]{ {{- p["path"] | graphpath -}} }
+{%- if p.get("caption") and p["caption"] != (fig.get("caption") or "") %}
+\caption{ {{- render_with_math(p["caption"], p.get("math_spans") or []) -}} }
+{%- endif %}
+\end{subfigure}\hfill
+{%- endfor %}
+{%- elif npanel == 1 %}
+\centering
+\includegraphics[width={{ base }},totalheight=\PFTFigMaxHeight,keepaspectratio]{ {{- panels[0]["path"] | graphpath -}} }
 {%- else %}
 {#- A figure whose graphic the source drew as instructions (TikZ/PGF, pstricks, an \input graph
     file this pipeline did not inline) has no picture to place. It used to print

@@ -51,6 +51,26 @@ BS = chr(92)
 # extraction pass (render/dollar_probe.py, 21,512 fields).
 _PROTECT_CHARS = "&#_%$"
 _PROTECT_RE = re.compile("(?<![" + re.escape(BS) + "])([" + re.escape(_PROTECT_CHARS) + "])")
+# Characters the flattener may leave bare that are legal prose but not legal LaTeX text mode.
+#
+# Angle brackets: OT1 -- the encoding IEEEtran still reaches for the body font -- has no glyph for
+# either one, so a bare bracket is dropped at typeset time even when it survived extraction, and
+# \textless / \textgreater are kernel commands needing no extra package. separate_urls() has
+# already turned any URL in angle brackets into \url{...} before this runs, so what is left here is
+# markup-like prose: 2501.12948 sn-article.tex:260's think tags and the chat-template tokens.
+#
+# A bare caret is math-only, so in text mode LaTeX reports "Missing $ inserted", opens math mode, and
+# math mode then runs past the end of the field into the next control sequence. On 2303.08774 that
+# swallowed the \item of \bibitem{Gray2017GPUKF} (main.bbl entry 34, whose predecessor's title is
+# "Self-attention does not need o(n^2) memory"), so the counter never advanced: the references page
+# printed [33] twice and every later number came out one low. \^ would put a circumflex accent on
+# the following letter instead, so the literal-caret command is the correct emit.
+_SPECIAL_RE = re.compile("(?<![" + re.escape(BS) + "])([<>^])")
+_SPECIAL_EMIT = {
+    "<": BS + "textless{}",
+    ">": BS + "textgreater{}",
+    "^": BS + "textasciicircum{}",
+}
 _KEY_BAD = re.compile(r"[^A-Za-z0-9_:.\-\/]")
 _LABEL_IN_TEX_RE = re.compile(r"\\label\s*\{([^{}]*)\}")
 
@@ -59,7 +79,8 @@ def protect_tex(s):
     """Escape the LaTeX catcode characters the flattener left bare, leaving escaped ones alone."""
     if not s:
         return ""
-    return _PROTECT_RE.sub(lambda g: BS + g.group(1), str(s))
+    out = _PROTECT_RE.sub(lambda g: BS + g.group(1), str(s))
+    return _SPECIAL_RE.sub(lambda g: _SPECIAL_EMIT[g.group(1)], out)
 
 
 # ----------------------------------------------------------------- layout-artifact scrub (Session 13)

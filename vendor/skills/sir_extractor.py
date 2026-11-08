@@ -38,10 +38,13 @@ import re
 import sys
 from datetime import datetime, timezone
 
+# 2.2: figures gained "panels" -- every graphic in a \subfigure / \begin{subfigure} float, not just
+# the first (Session 14C). Old 2.1 SIRs still render, because render_figure falls back to the single
+# "path" when "panels" is absent; they simply keep showing only panel (a).
 # 2.1: SIR gained "external_files" and the "listing" / "includepdf" block types (Session 14B).
 # Old 2.0 SIRs still render -- the renderer reads the key with .get() and defaults to empty -- but
 # they carry no listings, so a corpus re-extraction is what would make them show any.
-SCHEMA_VERSION = "2.1"
+SCHEMA_VERSION = "2.2"
 FORMATS = ("original", "ieee", "acm", "lncs")
 
 # recompile.py writes "\documentclass{llncs}" for the "lncs" key; the identifier on disk is lncs.
@@ -285,6 +288,19 @@ _L2T = None
 _NEEDS_RENDER = re.compile(r"[\\${}&~%#]")
 _L2T_CACHE: dict = {}
 
+# Formatting macros pylatexenc 2.11 has no entry for in latex2text's default_macro_dict. An
+# unknown macro makes latex_to_text discard its whole argument, so every \texttt{...} in prose was
+# silently deleted at extraction: 2501.12948 sn-article.tex:260 became "specifically ` ' and ` '."
+# with the <think> tags gone (they survive only in table and listing bodies, which are stored as
+# raw LaTeX and never reach this function). The same mechanism eats GPT-3's prompt strings --
+# 2005.14165 evaluation.tex:5 \texttt{"Answer: "} and Religion.tex:10 \texttt{Islam}, \texttt{violent}
+# -- 15 sites in 2501, 34 in 2005, 8 in 1706. Rewriting the macro to a plain braced group keeps the
+# argument, which is what the \textbb line below already did for the same reason; the styling is a
+# text-mode flattener's business and the words are not.
+_DROPPED_FORMAT_MACROS = ("textbb", "texttt", "mbox", "textsf", "textup", "textmd")
+_DROPPED_MACRO_RE = re.compile(
+    r"\\(?:" + "|".join(_DROPPED_FORMAT_MACROS) + r")\s*(?=\{)")
+
 
 def latex_to_text(s: str) -> str:
     """Best-effort printable rendering. refext was trained on plain reference strings, so
@@ -302,7 +318,7 @@ def latex_to_text(s: str) -> str:
         hit = _L2T_CACHE.get(key)
         if hit is not None:
             return hit
-    s = re.sub(r"\\textbb\s*\{", "{", s)
+    s = _DROPPED_MACRO_RE.sub("", s)
     if _L2T is None:
         try:
             from pylatexenc.latex2text import LatexNodes2Text
@@ -1578,6 +1594,60 @@ def _drop_caption_label(body: str) -> str:
     return "".join(out)
 
 
+_GRAPHIC_RE = re.compile(r"\\(?:includegraphics|pgfimage)\s*(?:\[[^\]]*\])?\s*\{([^{}]*)\}")
+
+
+def _panel_caption(group, warnings, macros=None):
+    """(text, math_spans) of the first caption inside one panel group, or ("", []).
+
+    ``\\label`` is stripped rather than emitted: the parent float already collects every label in the
+    block through ``panel_labels``, and defining the same label twice would leave ``\\ref`` resolving
+    to whichever definition LaTeX happened to take last.
+    """
+    m = re.search(r"\\(?:sub)?caption\s*(?:\[[^\]]*\])?\s*\{", group)
+    if not m:
+        return "", []
+    text, _ = match_braces(group, m.end() - 1)
+    text = _LABEL_RE.sub(" ", text)
+    return text_with_math(text, warnings, macros=macros)
+
+
+def figure_panels(inner, warnings, macros=None):
+    r"""Every graphic in a figure block, in source order, as [{path, caption}].
+
+    parse_figure used one re.search against a scalar path slot, so a float holding two
+    \subfigure or two \includegraphics kept panel (a) and destroyed panel (b): the caption
+    prose describing (b) survived, which is why 2501.12948 Fig 1 and Fig 9 read as a layout
+    problem rather than a parse one. Panel groups are found first so a panel can keep its own
+    caption; with no groups each bare graphic is its own panel, so a source that already
+    merged its panels into one image yields one entry and an unchanged output.
+    """
+    groups = []
+    for m in re.finditer(r"\\begin\s*\{subfigure\*?\}", inner):
+        env = "subfigure" + ("*" if "*" in m.group(0) else "")
+        g_start, g_end = find_env_end(inner, m.end(), env)
+        if g_start >= 0:
+            groups.append(inner[m.start():g_end])
+    if not groups:
+        for m in re.finditer(r"\\subfloat\s*(?:\[[^\]]*\])?\s*\{", inner):
+            _text, after = match_braces(inner, m.end() - 1)
+            groups.append(inner[m.start():after])
+
+    panels = []
+    for g in groups:
+        ig = _GRAPHIC_RE.search(g)
+        if ig:
+            cap, spans = _panel_caption(g, warnings, macros)
+            panel = {"path": ig.group(1).strip(), "caption": (cap or "").strip()}
+            if spans:
+                panel["math_spans"] = spans
+            panels.append(panel)
+    if len(panels) < 2:
+        panels = [{"path": ig.group(1).strip(), "caption": ""}
+                  for ig in _GRAPHIC_RE.finditer(inner)]
+    return [p for p in panels if p["path"]]
+
+
 def parse_figure(inner: str, warnings: list, macros=None):
     fig = {"label": None, "caption": None, "path": None, "placement": None}
     fig["placement"], inner = split_placement(inner)
@@ -1604,6 +1674,11 @@ def parse_figure(inner: str, warnings: list, macros=None):
         lab = _LABEL_RE.search(inner)
         if lab:
             fig["label"] = lab.group(1).strip()
+    panels = figure_panels(inner, warnings, macros=macros)
+    if panels:
+        fig["panels"] = panels
+        if not fig["path"]:
+            fig["path"] = panels[0]["path"]
     # ``\begin{subfigure}{}`` / ``\subfloat`` panels carry their own \label inside the parent float
     # (2501.12948 appendix.tex:682 \label{mmlupro}). Only the parent becomes a SIR figure, so those
     # targets were defined nowhere and the body's "As illustrated in Figure~\ref{mmlupro}" printed a
