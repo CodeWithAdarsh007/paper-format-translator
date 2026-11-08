@@ -576,6 +576,12 @@ def extract_xref_spans(text: str, spans: list, warnings: list = None) -> str:
         name = m.group(0).lstrip("\\")
         opts, braces, after = _read_xref_args(text, m.end())
         is_cite = "cite" in name.lower() or name.lower() in ("apud", "apudcn", "apudnn")
+        # natbib textual macros put the author name in the running sentence ("as in Henighan et
+        # al. [15]"), while \citep/\cite only bracket the number. None of the three target classes
+        # loads natbib, so \citet is flattened to \cite and the surname disappears. The flag lets
+        # the renderer put it back from the reference's author label (see renderer
+        # resolve_textual_cites).
+        textual = name.lower() in ("citet", "textcite", "citeauthor")
         latex = None
         if is_cite:
             keys = [k.strip() for k in re.split(r"[,;]", braces[-1] if braces else "") if k.strip()]
@@ -593,7 +599,11 @@ def extract_xref_spans(text: str, spans: list, warnings: list = None) -> str:
         out.append(text[i:m.start()])
         if latex is not None:
             idx = len(spans)
-            spans.append({"index": idx, "xref": latex, "kind": "cite" if is_cite else "ref"})
+            span = {"index": idx, "xref": latex, "kind": "cite" if is_cite else "ref"}
+            if is_cite and textual and keys:
+                span["textual"] = True
+                span["keys"] = keys
+            spans.append(span)
             out.append(XREF_PLACEHOLDER.format(i=idx))
         i = max(after, m.end())
     return "".join(out)
@@ -1278,6 +1288,16 @@ def parse_authors(author_src: str, institute_src=None):
             em = re.search(r"\\texttt\s*\{\s*([^{}\s]*@[^{}\s]*)\s*\}", raw)
             if em:
                 email = em.group(1).strip()
+            else:
+                # ACL groups several addresses in one \texttt{\{a, b\}@umich.edu}. The braces and
+                # comma-space break the single-token match above, so take the whole texttt argument
+                # whenever it clearly carries an address. 2402.12424 lost its contact email this way.
+                for tm in re.finditer(r"\\texttt\s*\{", raw):
+                    inner, _ = match_braces(raw, tm.end() - 1)
+                    plain = norm_ws(inner.replace("\\{", "{").replace("\\}", "}"))
+                    if "@" in plain:
+                        email = plain
+                        break
         inst_idx = None
         im = re.search(r"\\inst\s*\{([^{}]*)\}", raw)
         if im:
@@ -1338,6 +1358,14 @@ def parse_authors(author_src: str, institute_src=None):
             authors.append({"name": name, "affiliation": aff or None, "email": email or None})
             for extra in extra_names:
                 authors.append({"name": extra, "affiliation": aff or None, "email": None})
+    # Equal-contribution asterisk: 2402.12424 writes "Naihao Deng*$^{\twemoji{peach}}$". The bare
+    # ``*`` is stripped while cleaning the name/affiliation superscripts, so the "Contributed
+    # equally" footnote lost its two referents. Re-attach any ``Name*`` marker the raw block carried.
+    stars = {norm_ws(m.group(1)) for m in
+             re.finditer(r"([A-Z][\w.'\-]+(?:\s+[A-Z][\w.'\-]+)+)\s*\*", author_src or "")}
+    for a in authors:
+        if norm_ws(a.get("name") or "") in stars:
+            a["marker"] = "*"
     return authors
 
 
@@ -1689,6 +1717,56 @@ def parse_figure(inner: str, warnings: list, macros=None):
     if panels:
         fig["panel_labels"] = panels
     return fig
+
+
+def parse_independent_subfigures(inner: str, warnings: list, macros=None):
+    r"""Split a captionless float of two or more captioned ``\begin{subfigure}`` blocks into
+    independent figures.
+
+    2501.12948 appendix.tex:667 wraps the MMLU and MMLU-Pro charts in one ``\begin{figure}`` that
+    carries NO ``\caption`` of its own -- each ``\begin{subfigure}`` holds its own ``\caption`` and
+    ``\label``. Springer's ``subfigure`` package numbers every such caption independently, so the
+    original PDF prints them as Figure 15 (MMLU) and Figure 16 (MMLU-Pro). ``parse_figure`` merged
+    them into one float, so original Figure 16 vanished and every later figure shifted down by one
+    -- which is why the converted "Figure 16" was the Mathematical-performance chart and the body's
+    ``\ref{mmlupro}`` pointed at MMLU.
+
+    Returns a list of figure dicts (one per panel) when the pattern is a clean captioned-subfigure
+    group, or ``None`` to leave the float merged. ``None`` whenever: fewer than two groups, a real
+    parent ``\caption`` outside the groups (2501 Fig 1 / 2303 safety Fig, which stay (a)/(b)), or any
+    group missing its own caption, label or graphic. 2402 and 1706 use no ``\begin{subfigure}`` at
+    all, so this never touches them.
+    """
+    groups = []
+    for m in re.finditer(r"\\begin\s*\{subfigure\*?\}", inner):
+        env = "subfigure" + ("*" if "*" in m.group(0) else "")
+        g_start, g_end = find_env_end(inner, m.end(), env)
+        if g_start >= 0:
+            groups.append(inner[m.start():g_end])
+    if len(groups) < 2:
+        return None
+    # A \caption outside every subfigure group is a genuine parent caption -> the (a)/(b) layout is
+    # what the source intends; keep it merged and let parse_figure handle it.
+    remainder = inner
+    for g in groups:
+        remainder = remainder.replace(g, " ", 1)
+    if re.search(r"\\caption", remainder):
+        return None
+    out = []
+    for g in groups:
+        ig = _GRAPHIC_RE.search(g)
+        cap_m = re.search(r"\\(?:sub)?caption\s*(?:\[[^\]]*\])?\s*\{", g)
+        lab_m = _LABEL_RE.search(g)
+        if not (ig and cap_m and lab_m):
+            return None
+        cap_text, _ = match_braces(g, cap_m.end() - 1)
+        caption, spans = text_with_math(_LABEL_RE.sub(" ", cap_text), warnings, macros=macros)
+        fig = {"label": lab_m.group(1).strip(), "caption": caption,
+               "path": ig.group(1).strip(), "placement": None}
+        if spans:
+            fig["math_spans"] = spans
+        out.append(fig)
+    return out if len(out) >= 2 else None
 
 
 def parse_table(inner: str, warnings: list, env: str = None, whole: str = None,
@@ -2146,17 +2224,28 @@ def scan_blocks(text: str, ctx: dict, depth: int = 0):
             elif env in DIAGRAM_ENVS:
                 pass
             elif env in FIGURE_ENVS:
-                f = parse_figure(inner, ctx["warnings"], ctx.get("macros"))
-                if f["label"] or f["caption"]:
-                    f["section"] = ctx.get("section_index")
-                    # figure*/sidewaysfigure span the whole page, not one column: the IEEE renderer
-                    # needs that to choose \textwidth over \columnwidth (Step A2).
-                    f["span"] = env in SPANNING_FLOAT_ENVS
-                    ctx["figures"].append(f)
-                    if f["label"]:
-                        ctx["labels"].setdefault(f["label"], f["caption"] or "")
-                    for panel in f.get("panel_labels") or []:
-                        ctx["labels"].setdefault(panel, f["caption"] or "")
+                split = parse_independent_subfigures(inner, ctx["warnings"], ctx.get("macros"))
+                if split:
+                    # Captioned-subfigure group with no parent caption: emit one numbered float per
+                    # panel so the figure sequence matches the source (2501 Fig 16, see the helper).
+                    for f in split:
+                        f["section"] = ctx.get("section_index")
+                        f["span"] = env in SPANNING_FLOAT_ENVS
+                        ctx["figures"].append(f)
+                        if f["label"]:
+                            ctx["labels"].setdefault(f["label"], f["caption"] or "")
+                else:
+                    f = parse_figure(inner, ctx["warnings"], ctx.get("macros"))
+                    if f["label"] or f["caption"]:
+                        f["section"] = ctx.get("section_index")
+                        # figure*/sidewaysfigure span the whole page, not one column: the IEEE
+                        # renderer needs that to choose \textwidth over \columnwidth (Step A2).
+                        f["span"] = env in SPANNING_FLOAT_ENVS
+                        ctx["figures"].append(f)
+                        if f["label"]:
+                            ctx["labels"].setdefault(f["label"], f["caption"] or "")
+                        for panel in f.get("panel_labels") or []:
+                            ctx["labels"].setdefault(panel, f["caption"] or "")
             elif env in TABLE_ENVS:
                 t = parse_table(inner, ctx["warnings"], env=env, whole=text[start:end],
                               macros=ctx.get("macros"))
@@ -2192,7 +2281,11 @@ def scan_blocks(text: str, ctx: dict, depth: int = 0):
                 ctx["labels"].setdefault(e["label"], e["latex"])
             blocks.append({"type": "equation", "latex": e["latex"], "label": e["label"]})
         elif kind == "cite":
-            blocks.append({"type": "citation", "keys": payload})
+            keys, textual = payload
+            blk = {"type": "citation", "keys": keys}
+            if textual:
+                blk["textual"] = True
+            blocks.append(blk)
             ctx["n_cites"] += 1
         elif kind == "ref":
             lab, rkind, macro, rlabels = payload
@@ -2295,7 +2388,11 @@ def _next_construct(text: str, pos: int, kinds=None):
     m = _CITE_RE.search(text, pos)
     if m and not _inside_footnote(text, m.start()):
         keys = _read_cite_args(text, m.end())
-        cands.append(("cite", m.start(), _args_end(text, m.end()), keys))
+        # Carry the macro name's textual/parenthetical role with the block, exactly as the "ref"
+        # path carries \Cref/\autoref above: \citet puts the author in the sentence, \citep does not.
+        macro = m.group(0).lstrip("\\").rstrip("*").lower()
+        textual = macro in ("citet", "textcite", "citeauthor")
+        cands.append(("cite", m.start(), _args_end(text, m.end()), (keys, textual)))
     m = _REF_RE.search(text, pos)
     if m and not _inside_footnote(text, m.start()):
         lab = _read_first_arg(text, m.end())

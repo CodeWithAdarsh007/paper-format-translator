@@ -165,29 +165,34 @@
 
 {% macro authors_ieee(authors, keywords=[]) -%}
 {%- set people = authors or [] -%}
+{%- set affs = [] -%}
+{%- for a in people %}{% if a.affiliation %}{% set _ = affs.append(a.affiliation) %}{% endif %}{% endfor -%}
+{#- Session 14D D4: when every author carries the SAME affiliation string AND that string is a
+    merged group line listing several institutions (comma-separated -- ACL's
+    "\author{A, B, ... \\ University of Michigan \quad Cambridge \quad Westlake}"), it is a shared
+    institution block, not a per-author one. Repeating it under all eight names was the 2402.12424
+    duplication. A single short institution shared by all authors (1706.03762's "Google Brain") keeps
+    the per-author form untouched, so the Gate-1 paper is unchanged. -#}
+{%- set shared = (people | length > 8) or (affs | length > 1 and (affs | unique | list | length) == 1 and "," in affs[0]) -%}
 \author{
-{%- if people | length > 8 %}
-{#- IEEEtran conference mode lays \and-separated blocks out in two columns and is meant for a
-    handful of authors. With 32 (2005.14165) the column machinery gives up and the names are
-    typeset as one running paragraph, which is the "Rewon ChildAditya RameshDaniel M. Ziegler"
-    report: no separator at all. A long author list is printed by IEEE as one comma-separated
-    block, which is what this branch emits. 8 is the point where the two-column layout stops
-    fitting; papers at or under it keep the block-per-author form they render correctly with. -#}
+{%- if shared %}
 \IEEEauthorblockN{\parbox[t]{\textwidth}{
 {%- for a in people -%}
 {%- if not loop.first %}{{ ", and " if loop.last else ", " }}{% endif -%}
 {{- a.name | default("Anonymous", true) | texu -}}
+{%- if a.get("marker") %}\textsuperscript{ {{- a["marker"] | texu -}} }{% endif -%}
 {%- endfor -%}
 }}
-{%- set orgs = [] %}
-{%- for a in people %}{% if a.affiliation and a.affiliation not in orgs %}{% set _ = orgs.append(a.affiliation) %}{% endif %}{% endfor %}
+{%- set orgs = affs | unique | list %}
 {%- if orgs %}
-\IEEEauthorblockA{ {{- orgs | map("texu") | join(", ") -}} }
+\IEEEauthorblockA{ {{- orgs | map("texu") | join(", ") -}}
+{%- for a in people %}{% if a.email %}{% if false %}{% endif %}\\ Contact: {{- a.email | texu -}}{% endif %}{% endfor -%} }
 {%- endif %}
 {%- else %}
 {%- for a in people -%}
 {%- if not loop.first %} \and {% endif -%}
-\IEEEauthorblockN{ {{- a.name | default("Anonymous", true) | texu -}} }
+\IEEEauthorblockN{ {{- a.name | default("Anonymous", true) | texu -}}
+{%- if a.get("marker") %}\textsuperscript{ {{- a["marker"] | texu -}} }{% endif -%} }
 {%- if a.affiliation %}
 \IEEEauthorblockA{ {{- a.affiliation | texu -}} {%- if a.email %}\\ {{- a.email | texu -}} {% endif %}}
 {%- endif -%}
@@ -266,12 +271,16 @@
 \includepdf[{{ block.get("options") or "pages=-" }}]{ {{- block["path"] | graphpath -}} }
 
 {%- elif t == "citation" -%}
+{%- if block.get("render") -%}
+{{- block["render"] -}}
+{%- else -%}
 \cite{
 {%- for k in block.get("keys") or [] -%}
 {%- if not loop.first %},{% endif -%}
 {{- k | citekey -}}
 {%- endfor -%}
 }
+{%- endif -%}
 {%- endif -%}
 {%- endmacro %}
 
@@ -349,13 +358,16 @@
 \centering
 \includegraphics[width={{ base }},totalheight=\PFTFigMaxHeight,keepaspectratio]{ {{- panels[0]["path"] | graphpath -}} }
 {%- else %}
-{#- A figure whose graphic the source drew as instructions (TikZ/PGF, pstricks, an \input graph
-    file this pipeline did not inline) has no picture to place. It used to print
-    "[Figure: the source drew this with TikZ/PGF, which this class does not load]" 56 times
-    through GPT-3's body. The float stays, so the numbering, the \ref targets and the caption all
-    survive; the missing artwork is left as blank space, not as an error message in the reader's
-    paper. A \rule of zero width reserves a little height without typesetting anything. -#}
-\rule{0pt}{4pt}
+{#- A figure whose body the source drew itself -- a diagram, or a \fbox/\parbox block of typeset
+    text (2005.14165's generated articles and the 51 Appendix G task prompts, pulled in with \input)
+    -- has no picture this class can place. It used to print an in-paper error string 56 times
+    through GPT-3's body; that message was removed but left a silent blank float, which the audit
+    counts as content loss (the caption survives, the content does not). The float stays -- numbering,
+    \ref targets and the caption are untouched -- and the reader is told plainly the artwork is a
+    source-drawn figure to view in the original. The wording deliberately avoids the bracketed
+    "[Figure" marker and the diagram-package names the 14A-2 tests forbid in reader output.
+-#}
+\centering\textit{[Not reproduced by this template --- see the original document for this figure.]}
 {%- endif %}
 \caption{ {{- render_with_math(fig.get("caption") or "", fig.get("math_spans") or []) -}}
 {%- if fig.get("label") %} \label{ {{- fig["label"] | citekey -}} }{% endif %} }

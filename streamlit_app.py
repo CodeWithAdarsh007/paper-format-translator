@@ -282,5 +282,5 @@ if GITHUB_URL:
     footer.append(f"[Code]({GITHUB_URL})")
 if DATASET_DOI:
     footer.append(f"[Dataset]({DATASET_DOI})")
-footer.append("Round-trip F1 0.9934 on 810 papers; 366 tests passing (Session 14C)")
+footer.append("Round-trip F1 0.9934 on 810 papers; 382 tests passing (Session 14D)")
 st.caption("  |  ".join(footer))

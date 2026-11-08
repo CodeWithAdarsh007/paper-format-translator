@@ -1096,6 +1096,66 @@ def _env(templates_dir=None):
     return ed
 
 
+def cite_author_labels(refs):
+    """key (citekey-sanitised) -> the natbib author short-label, e.g. "Henighan et~al.".
+
+    The ``\\bibitem`` optional label is the ground truth (it is what natbib prints before the number
+    for a textual citation). ``\\citet`` is flattened to ``\\cite`` by the extractor because none of
+    the three target classes loads natbib, so this is what lets the renderer put the surname back.
+    Falls back to the first-author surname from the raw entry only when there is no label.
+    """
+    by_key = {}
+    for r in refs or []:
+        if not isinstance(r, dict):
+            continue
+        key = r.get("key")
+        if not key:
+            continue
+        st = r.get("structured") or {}
+        label = (st.get("bbl_label") or "").strip()
+        prefix = ""
+        if label:
+            prefix = label.split("(", 1)[0].strip()          # "Henighan et~al." from "...(2020)..."
+        else:
+            raw = (r.get("raw") or st.get("text") or "").strip()
+            first = raw.split(",", 1)[0].strip()
+            toks = first.split()
+            if 2 <= len(toks) <= 4 and first.replace(" ", "").isalpha():
+                prefix = toks[-1]
+        if prefix:
+            by_key[citekey(key)] = prefix
+    return by_key
+
+
+def resolve_textual_cites(nodes, by_key):
+    """Rewrite the extractor's textual-cite spans so ``\\citet{X}`` prints "Author~\\cite{X}".
+
+    A span the extractor flagged ``textual`` carried the author into running text in the source
+    ("as in~\\citet{henighan2020scaling}" -> "as in Henighan et~al. [15]"). The author is looked up
+    per key so ``\\citet{A,B}`` becomes "A [N], B [M]". Only spans carrying the flag are touched, so
+    ordinary ``\\cite``/``\\citep`` render as a bare "[N]" exactly as before.
+    """
+    def walk(x):
+        if isinstance(x, dict):
+            if x.get("textual") and x.get("type") == "citation" and x.get("keys"):
+                x["render"] = ", ".join(
+                    (by_key.get(citekey(k), "") + "~" if by_key.get(citekey(k)) else "")
+                    + "\\cite{%s}" % citekey(k) for k in x["keys"])
+            elif x.get("textual") and x.get("kind") == "cite" and x.get("keys") and "xref" in x:
+                parts = []
+                for k in x["keys"]:
+                    pre = by_key.get(citekey(k), "")
+                    parts.append((pre + "~" if pre else "") + "\\cite{%s}" % citekey(k))
+                if parts:
+                    x["xref"] = ", ".join(parts)
+            for v in x.values():
+                walk(v)
+        elif isinstance(x, list):
+            for v in x:
+                walk(v)
+    walk(nodes)
+
+
 def build_context(sir, fmt, warnings):
     """Normalise one SIR into the template variables, collecting warnings instead of crashing."""
     dumps, verbatim_cjk = sanitize_sir_verbatim(sir)
@@ -1135,6 +1195,11 @@ def build_context(sir, fmt, warnings):
     sections, pending_figures, pending_tables = anchor_floats(
         annotate_block_separators(mark_appendix_break(sections)),
         figures, tables)
+    textual_authors = cite_author_labels(refs)
+    if textual_authors:
+        resolve_textual_cites(
+            [sections, figures, tables, equations, md.get("abstract_math_spans") or []],
+            textual_authors)
     broken = unbalanced_spans(sir)
     if broken:
         warnings.append(f"{broken} math span(s) with unbalanced $ re-split into text + math")
