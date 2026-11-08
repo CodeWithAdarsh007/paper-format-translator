@@ -1,14 +1,3 @@
----
-title: Paper Format Translator
-emoji: 📄
-colorFrom: indigo
-colorTo: purple
-sdk: docker
-app_port: 7860
-pinned: false
-license: mit
----
-
 # Paper Format Translator
 
 **Live app:** https://paper-format-translator.streamlit.app/
