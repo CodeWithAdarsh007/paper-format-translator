@@ -3,7 +3,6 @@
 **Live app:** https://paper-format-translator.streamlit.app/
 **Dataset:** arXiv-MFT v3 on Zenodo — **DOI
 [10.5281/zenodo.24054291](https://doi.org/10.5281/zenodo.24054291)** (published 2026-11-08)
-**Deploy verified at:** `8fab304` · footer reads "382 tests passing (Session 14D)"
 
 ![status](https://img.shields.io/badge/status-research%20prototype-blue)
 ![licence-code](https://img.shields.io/badge/code-MIT-green)
